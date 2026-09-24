@@ -44,6 +44,7 @@
           @click="navegar('dashboard')"
         />
         <SidebarItem
+          v-if="puedeOperar"
           icon="pi-users"
           label="Clientes"
           :collapsed="collapsed"
@@ -51,6 +52,7 @@
           @click="navegar('clientes')"
         />
         <SidebarItem
+          v-if="puedeOperar"
           icon="pi-car"
           label="Vehículos"
           :collapsed="collapsed"
@@ -58,6 +60,7 @@
           @click="navegar('vehiculos')"
         />
         <SidebarItem
+          v-if="puedeOperar"
           icon="pi-calendar"
           label="Reservas"
           :collapsed="collapsed"
@@ -65,6 +68,7 @@
           @click="navegar('reservas')"
         />
         <SidebarItem
+          v-if="puedeOperar"
           icon="pi-file"
           label="Contratos"
           :collapsed="collapsed"
@@ -73,7 +77,7 @@
         />
       </div>
 
-      <div>
+      <div v-if="puedeOperar">
         <p
           v-if="!collapsed"
           class="text-xs font-bold tracking-widest uppercase px-3 mb-2"
@@ -106,7 +110,7 @@
 
       <div>
         <p
-          v-if="!collapsed"
+          v-if="!collapsed && authStore.isAdmin"
           class="text-xs font-bold tracking-widest uppercase px-3 mb-2"
           style="color: #f0a50088"
         >
@@ -155,6 +159,9 @@ import logoElGuayabo from "@/assets/logo-el-guayabo.png";
 
 const themeStore = useThemeStore();
 const authStore = useAuthStore();
+const puedeOperar = computed(() =>
+  authStore.userRoles.some((role) => ["ADMINISTRADOR", "EMPLEADO"].includes(role)),
+);
 const darkSwitch = computed({
   get: () => themeStore.isDark,
   set: (v) => themeStore.setDark(v),
@@ -194,7 +201,10 @@ function navegar(ruta) {
   align-items: center;
   gap: 0.75rem;
   padding: 1.25rem 1rem;
-  transition: grid-template-columns 0.3s ease, gap 0.3s ease, padding 0.3s ease;
+  transition:
+    grid-template-columns 0.3s ease,
+    gap 0.3s ease,
+    padding 0.3s ease;
 }
 
 .sidebar-brand--collapsed {
@@ -220,7 +230,10 @@ function navegar(ruta) {
   white-space: nowrap;
   opacity: 1;
   transform: translateX(0);
-  transition: opacity 0.2s ease, max-width 0.3s ease, transform 0.3s ease;
+  transition:
+    opacity 0.2s ease,
+    max-width 0.3s ease,
+    transform 0.3s ease;
 }
 
 .sidebar-title--collapsed {
@@ -241,7 +254,13 @@ function navegar(ruta) {
   background: rgba(89, 20, 14, 0.34);
   color: #f0a500;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  transition: width 0.3s ease, height 0.3s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  transition:
+    width 0.3s ease,
+    height 0.3s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
 }
 
 .sidebar-collapse-btn:hover {
