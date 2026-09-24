@@ -129,10 +129,9 @@
                     class="w-8 h-8 rounded-lg flex items-center justify-center border transition-all hover:shadow-sm shrink-0"
                     :class="isDark ? 'border-red-800 bg-red-950/40 text-[#f0a500] hover:bg-red-950/70' : 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100'"
                     title="Registrar pago"
-                    :disabled="cargandoPago === c.id"
-                    @click="abrirPago(c)"
+                    @click="router.push({ name: 'pagos', query: { contrato_id: c.id, cobrar: '1' } })"
                   >
-                    <i :class="cargandoPago === c.id ? 'pi pi-spin pi-spinner text-xs' : 'pi pi-dollar text-xs'"></i>
+                    <i class="pi pi-dollar text-xs"></i>
                   </button>
                   <router-link
                     v-if="c.estado_contrato === 'ACTIVO'"
@@ -194,7 +193,6 @@
       </div>
     </div>
 
-    <PagoRegistrarModal :visible="modalPago" :contrato="contratoPago" :guardando="guardandoPago" @cerrar="modalPago = false" @guardar="registrarPago" />
     <ContratoPdfPreview :visible="modalPdf" :contrato="contratoVer" @cerrar="cerrarPdf" />
   </div>
 </template>
@@ -203,12 +201,9 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Swal from 'sweetalert2'
-import PagoRegistrarModal from '@/components/pagos/PagoRegistrarModal.vue'
 import ContratoPdfPreview from '@/components/contratos/ContratoPdfPreview.vue'
 import { useContratosStore } from '@/stores/contratos'
-import { usePagosStore } from '@/stores/pagos'
 import { useAppTheme } from '@/composables/useAppTheme'
-import { toastSuccess } from '@/utils/toast'
 import {
   nombreVehiculo,
   formatPrecio,
@@ -224,15 +219,10 @@ const { isDark } = useAppTheme()
 const route = useRoute()
 const router = useRouter()
 const store = useContratosStore()
-const pagosStore = usePagosStore()
 
 const buscar = ref('')
 const filtroEstado = ref('')
 const filtroPago = ref('')
-const modalPago = ref(false)
-const contratoPago = ref(null)
-const guardandoPago = ref(false)
-const cargandoPago = ref(null)
 const modalPdf = ref(false)
 const contratoVer = ref(null)
 const cargandoPdf = ref(null)
@@ -370,39 +360,6 @@ function estadoPagoStyle(estado) {
   return m[estado] || 'background:#f3f4f6; color:#6b7280;'
 }
 
-function actualizarContratoEnLista(actualizado) {
-  const idx = store.contratos.findIndex((x) => x.id === actualizado.id)
-  if (idx !== -1) {
-    store.contratos[idx] = { ...store.contratos[idx], ...actualizado }
-  }
-}
-
-async function abrirPago(c) {
-  cargandoPago.value = c.id
-  try {
-    const contrato = await store.fetchContrato(c.id)
-    contratoPago.value = await completarContratoConPagos(contrato)
-    modalPago.value = true
-  } catch (e) {
-    Swal.fire({ icon: 'error', title: 'Error', text: e.response?.data?.message || 'No se pudo cargar el contrato.', confirmButtonColor: '#922b21' })
-  } finally {
-    cargandoPago.value = null
-  }
-}
-
-async function completarContratoConPagos(contrato) {
-  if (!contrato?.numero_contrato) return contrato
-  await pagosStore.fetchPagos({ search: contrato.numero_contrato, per_page: 100 })
-  const pagosContrato = pagosStore.pagos.filter((p) => Number(p.contrato_id || p.contrato?.id) === Number(contrato.id))
-  return {
-    ...contrato,
-    pagos: pagosContrato,
-    monto_pagado: pagosContrato
-      .filter((p) => p.estado_transaccion === 'CONFIRMADO')
-      .reduce((s, p) => s + Number(p.monto || 0), 0),
-  }
-}
-
 async function verContrato(c) {
   cargandoPdf.value = c.id
   try {
@@ -431,25 +388,6 @@ async function abrirContratoDesdeQuery() {
   await verContrato({ id: contratoId })
 }
 
-async function registrarPago(form) {
-  guardandoPago.value = true
-  try {
-    const pagos = Array.isArray(form.pagos) ? form.pagos : [form]
-    for (const pago of pagos) {
-      await pagosStore.registrar(contratoPago.value.id, pago)
-    }
-    const contratoActualizado = await store.fetchContrato(contratoPago.value.id)
-    const actualizado = await completarContratoConPagos(contratoActualizado)
-    actualizarContratoEnLista(actualizado)
-    modalPago.value = false
-    contratoPago.value = null
-    toastSuccess(pagos.length > 1 ? 'Pagos registrados' : 'Pago registrado')
-  } catch (e) {
-    Swal.fire({ icon: 'error', title: 'Error', text: e.response?.data?.message || pagosStore.error, confirmButtonColor: '#922b21' })
-  } finally {
-    guardandoPago.value = false
-  }
-}
 </script>
 
 <style scoped>
@@ -519,4 +457,3 @@ async function registrarPago(form) {
   white-space: nowrap;
 }
 </style>
-
