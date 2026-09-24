@@ -11,13 +11,10 @@
       </button>
       <div class="flex-1 min-w-0">
         <p class="wizard-kicker">Generación digital</p>
-        <h1 class="wizard-title">{{ reservaId ? 'Contrato desde reserva' : 'Nueva renta directa' }}</h1>
+        <h1 class="wizard-title">{{ reservaId ? 'Contrato desde reserva' : 'Nuevo contrato' }}</h1>
       </div>
       <div v-if="reservaOrigen" class="wizard-badge-reserva">
         Reserva #{{ reservaOrigen.id }}
-      </div>
-      <div v-else class="wizard-badge-reserva wizard-badge-reserva--directa">
-        Renta directa
       </div>
       <div v-if="contratoGenerado" class="wizard-badge-ok">
         <i class="pi pi-check"></i> {{ contratoGenerado.numero_contrato }}
@@ -198,14 +195,18 @@ function escaparHtml(value) {
     .replace(/'/g, '&#039;')
 }
 
-function htmlAdvertenciaIncidencias(advertencia, incidencias = []) {
-  if (!advertencia) return ''
-  const lista = incidencias.slice(0, 3)
-    .map((i) => `<li><strong>${escaparHtml(i.tipo_incidencia || 'Incidencia')}:</strong> ${escaparHtml(i.descripcion || 'Sin descripción')}</li>`)
+function labelTipoDetalleEstetico(tipo) {
+  return tipo === 'DANIO ESTETICO' ? 'Daño estético' : tipo || 'Detalle estético'
+}
+
+function htmlAdvertenciaEstetica(advertenciaEstetica, detallesEsteticos = []) {
+  if (!advertenciaEstetica) return ''
+  const lista = detallesEsteticos.slice(0, 3)
+    .map((detalle) => `<li><strong>${escaparHtml(labelTipoDetalleEstetico(detalle.tipo_incidencia))}:</strong> ${escaparHtml(detalle.descripcion || 'Sin descripción')}</li>`)
     .join('')
-  const extra = incidencias.length > 3 ? `<p style="margin-top:.5rem;">Y ${incidencias.length - 3} más.</p>` : ''
+  const extra = detallesEsteticos.length > 3 ? `<p style="margin-top:.5rem;">Y ${detallesEsteticos.length - 3} más.</p>` : ''
   return `
-    <p style="margin-bottom:.75rem;">${escaparHtml(advertencia)}</p>
+    <p style="margin-bottom:.75rem;">${escaparHtml(advertenciaEstetica)}</p>
     ${lista ? `<ul style="text-align:left; padding-left:1.25rem; margin:0;">${lista}</ul>${extra}` : ''}
   `
 }
@@ -486,8 +487,7 @@ async function generarContrato() {
     }
     const contrato = await contratosStore.crear(payload)
     contratoGenerado.value = contrato
-    const advertenciaContrato = contratosStore.advertencia
-    const htmlAdvertencia = htmlAdvertenciaIncidencias(advertenciaContrato, contratosStore.incidenciasPendientes)
+    const htmlAdvertencia = htmlAdvertenciaEstetica(contratosStore.advertenciaEstetica, contratosStore.detallesEsteticos)
     if (htmlAdvertencia) {
       await Swal.fire({
         icon: 'warning',
@@ -549,9 +549,6 @@ function cerrarPreviewContrato() {
   font-size: 0.7rem; font-weight: 800; padding: 0.35rem 0.75rem;
   border-radius: 999px; background: rgba(146,43,33,0.1); color: #922b21;
   border: 1px solid rgba(146,43,33,0.25);
-}
-.wizard-badge-reserva--directa {
-  background: rgba(22,163,74,0.1); color: #166534; border-color: rgba(22,163,74,0.28);
 }
 
 .wizard-stepper {

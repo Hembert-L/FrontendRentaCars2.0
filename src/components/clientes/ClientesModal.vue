@@ -3,9 +3,9 @@
     <Transition name="modal">
       <div
         v-if="visible"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        class="fixed inset-0 z-[80] flex items-center justify-center p-4"
         style="background:rgba(0,0,0,0.45);"
-        @click.self="$emit('cerrar')"
+        @click.self.stop="$emit('cerrar')"
       >
         <div
           class="rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden"
@@ -30,7 +30,7 @@
             </div>
             <button
               type="button"
-              @click="$emit('cerrar')"
+              @click.stop.prevent="$emit('cerrar')"
               class="w-8 h-8 rounded-lg flex items-center justify-center transition-colors border"
               :class="isDark
                 ? 'border-red-900/60 text-[#f0a500] hover:bg-red-950/50 hover:border-red-800'
@@ -178,7 +178,7 @@
             <div class="flex gap-3 pt-2">
               <button
                 type="button"
-                @click="$emit('cerrar')"
+                @click.stop.prevent="$emit('cerrar')"
                 class="flex-1 py-2.5 rounded-xl font-bold text-sm border-2 transition-all"
                 :class="isDark
                   ? 'border-red-800 text-red-300 hover:bg-red-950/40 hover:border-red-700'
@@ -536,6 +536,7 @@ function fechaPosteriorAHoy(value) {
 .modal-panel-dark .field-input.error { border-color:#f87171; background:#450a0a; }
 .modal-panel-dark .field-input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.85); }
 </style>
+
 
 
 

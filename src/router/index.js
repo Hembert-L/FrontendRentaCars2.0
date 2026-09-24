@@ -2,6 +2,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
 import { useAuthStore } from '@/stores/auth'
 
+const ROLES_OPERATIVOS = ['ADMINISTRADOR', 'EMPLEADO']
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   scrollBehavior() {
@@ -32,19 +34,19 @@ const router = createRouter({
           path: 'usuarios',
           name: 'usuarios',
           component: () => import('../views/UsuariosView.vue'),
-          meta: { requiresAdmin: true },
+          meta: { allowedRoles: ['ADMINISTRADOR'] },
         },
-        { path: 'clientes', name: 'clientes', component: () => import('../views/ClientesView.vue') },
-        { path: 'vehiculos', name: 'vehiculos', component: () => import('../views/VehiculosView.vue') },
-        { path: 'reservas', name: 'reservas', component: () => import('../views/ReservasView.vue') },
-        { path: 'reservas/nueva', name: 'reservas-nueva', component: () => import('../views/ReservaCrearView.vue') },
-        { path: 'contratos', name: 'contratos', component: () => import('../views/ContratosView.vue') },
-        { path: 'contratos/nuevo', name: 'contratos-nuevo', component: () => import('../views/ContratoCrearView.vue') },
-        { path: 'contratos/:id/cierre', name: 'contrato-cierre', component: () => import('../views/ContratoCierreView.vue') },
-        { path: 'pagos', name: 'pagos', component: () => import('../views/PagosView.vue') },
-        { path: 'mantenimiento', name: 'mantenimiento', component: () => import('../views/MantenimientoView.vue') },
-        { path: 'reportes', name: 'reportes', component: () => import('../components/reportes/ReportesView.vue') },
-        { path: 'reportes/vista', name: 'reportes-vista', component: () => import('../components/reportes/ReporteVista.vue') },
+        { path: 'clientes', name: 'clientes', component: () => import('../views/ClientesView.vue'), meta: { allowedRoles: ROLES_OPERATIVOS } },
+        { path: 'vehiculos', name: 'vehiculos', component: () => import('../views/VehiculosView.vue'), meta: { allowedRoles: ROLES_OPERATIVOS } },
+        { path: 'reservas', name: 'reservas', component: () => import('../views/ReservasView.vue'), meta: { allowedRoles: ROLES_OPERATIVOS } },
+        { path: 'reservas/nueva', name: 'reservas-nueva', component: () => import('../views/ReservaCrearView.vue'), meta: { allowedRoles: ROLES_OPERATIVOS } },
+        { path: 'contratos', name: 'contratos', component: () => import('../views/ContratosView.vue'), meta: { allowedRoles: ROLES_OPERATIVOS } },
+        { path: 'contratos/nuevo', name: 'contratos-nuevo', component: () => import('../views/ContratoCrearView.vue'), meta: { allowedRoles: ROLES_OPERATIVOS } },
+        { path: 'contratos/:id/cierre', name: 'contrato-cierre', component: () => import('../views/ContratoCierreView.vue'), meta: { allowedRoles: ROLES_OPERATIVOS } },
+        { path: 'pagos', name: 'pagos', component: () => import('../views/PagosView.vue'), meta: { allowedRoles: ROLES_OPERATIVOS } },
+        { path: 'mantenimiento', name: 'mantenimiento', component: () => import('../views/MantenimientoView.vue'), meta: { allowedRoles: ROLES_OPERATIVOS } },
+        { path: 'reportes', name: 'reportes', component: () => import('../components/reportes/ReportesView.vue'), meta: { allowedRoles: ROLES_OPERATIVOS } },
+        { path: 'reportes/vista', name: 'reportes-vista', component: () => import('../components/reportes/ReporteVista.vue'), meta: { allowedRoles: ROLES_OPERATIVOS } },
       ],
     },
   ],
@@ -63,7 +65,8 @@ router.beforeEach((to) => {
     return { name: 'dashboard' }
   }
 
-  if (to.matched.some((record) => record.meta.requiresAdmin) && !authStore.isAdmin) {
+  const allowedRoles = to.matched.flatMap((record) => record.meta.allowedRoles || [])
+  if (allowedRoles.length && !allowedRoles.some((role) => authStore.userRoles.includes(role))) {
     return { name: 'dashboard' }
   }
 })

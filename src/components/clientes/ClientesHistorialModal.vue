@@ -3,8 +3,8 @@
     <Transition name="modal">
       <div
         v-if="visible"
-        class="hist-backdrop fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4"
-        @click.self="$emit('cerrar')"
+        class="hist-backdrop fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-4"
+        @click.self.stop="$emit('cerrar')"
       >
         <div class="hist-shell w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden" @click.stop>
           <!-- Header -->
@@ -33,7 +33,7 @@
                 </div>
               </div>
             </div>
-            <button type="button" class="hist-close-btn" @click="$emit('cerrar')">
+            <button type="button" class="hist-close-btn" @click.stop.prevent="$emit('cerrar')">
               <i class="pi pi-times"></i>
             </button>
           </div>
@@ -307,7 +307,7 @@
           </div>
 
           <div class="hist-footer px-5 py-3 border-t flex justify-end flex-shrink-0" :class="isDark ? 'border-gray-800 bg-gray-900' : 'border-gray-100 bg-white'">
-            <button type="button" class="hist-btn-close" :class="isDark ? 'hist-btn-close--dark' : ''" @click="$emit('cerrar')">
+            <button type="button" class="hist-btn-close" :class="isDark ? 'hist-btn-close--dark' : ''" @click.stop.prevent="$emit('cerrar')">
               Cerrar
             </button>
           </div>
@@ -1113,3 +1113,4 @@ watch(
 .modal-enter-active, .modal-leave-active { transition: opacity 0.2s ease; }
 .modal-enter-from, .modal-leave-to { opacity: 0; }
 </style>
+

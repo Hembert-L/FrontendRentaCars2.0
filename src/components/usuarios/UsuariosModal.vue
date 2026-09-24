@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <Transition name="modal">
-      <div v-if="visible" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,0.55);" @click.self="$emit('cerrar')">
+      <div v-if="visible" class="fixed inset-0 z-[80] flex items-center justify-center p-4" style="background:rgba(0,0,0,0.55);" @click.self.stop="$emit('cerrar')">
         <div class="rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" :class="isDark ? 'bg-gray-900' : 'bg-white'" @click.stop>
 
           <!-- Header -->
@@ -19,7 +19,7 @@
                   {{ modoEdicion ? 'Actualiza los datos' : 'Completa la información' }}</p>
               </div>
             </div>
-            <button @click="$emit('cerrar')" class="w-8 h-8 rounded-lg flex items-center justify-center transition-colors" :class="isDark ? 'text-gray-400 hover:bg-gray-800' : 'text-gray-400 hover:bg-gray-100'" >
+            <button type="button" @click.stop.prevent="$emit('cerrar')" class="w-8 h-8 rounded-lg flex items-center justify-center transition-colors" :class="isDark ? 'text-gray-400 hover:bg-gray-800' : 'text-gray-400 hover:bg-gray-100'" >
               <i class="pi pi-times text-sm"></i>
             </button>
           </div>
@@ -132,7 +132,7 @@
 
             <!-- Botones -->
             <div class="flex gap-3 pt-2">
-              <button type="button" @click="$emit('cerrar')"
+              <button type="button" @click.stop.prevent="$emit('cerrar')"
                 class="flex-1 py-2.5 rounded-xl font-bold text-sm border-2 transition-all"
                 :class="isDark ? 'border-gray-700 text-gray-400 hover:bg-gray-800' : 'border-gray-200 text-gray-500 hover:bg-gray-50'">
                 Cancelar
@@ -243,3 +243,4 @@ async function handleGuardar() {
 .modal-enter-active, .modal-leave-active { transition: opacity 0.2s ease; }
 .modal-enter-from, .modal-leave-to { opacity: 0; }
 </style>
+

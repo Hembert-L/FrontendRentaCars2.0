@@ -64,7 +64,7 @@
           Cliente no encontrado
         </p>
         <p class="text-xs mt-2 leading-relaxed" :class="isDark ? 'text-gray-400' : 'text-gray-600'">
-          Regístralo desde Clientes y luego vuelve para crear la renta directa.
+          Regístralo desde Clientes y luego vuelve para crear el contrato.
         </p>
         <router-link
           :to="{ name: 'clientes' }"
@@ -90,7 +90,7 @@
       >
         <p class="text-sm font-bold flex items-center gap-2" :class="isDark ? 'text-green-300' : 'text-green-900'">
           <i class="pi pi-bolt"></i>
-          Renta directa sin reserva
+          Contrato sin reserva
         </p>
         <p class="text-xs mt-2 leading-relaxed" :class="isDark ? 'text-green-200/80' : 'text-green-800'">
           Este cliente no tiene reservas activas. Puedes continuar y crear un contrato directo con un vehículo disponible.
@@ -108,7 +108,7 @@
             Este cliente tiene {{ reservas.length === 1 ? 'una reserva pendiente' : `${reservas.length} reservas pendientes` }}
           </p>
           <p class="text-xs mt-1 leading-relaxed" :class="isDark ? 'text-amber-100/80' : 'text-amber-800'">
-            Puedes generar el contrato desde una reserva existente o continuar como renta directa independiente.
+            Puedes generar el contrato desde una reserva existente o continuar sin reserva vinculada.
           </p>
         </div>
 
@@ -140,7 +140,7 @@
           @click="$emit('reserva-omitir')"
         >
           <i :class="rentaDirectaConfirmada ? 'pi pi-check-circle' : 'pi pi-bolt'"></i>
-          {{ rentaDirectaConfirmada ? 'Renta directa seleccionada' : 'Crear renta directa de todos modos' }}
+          {{ rentaDirectaConfirmada ? 'Contrato sin reserva seleccionado' : 'Continuar sin reserva' }}
         </button>
       </div>
 

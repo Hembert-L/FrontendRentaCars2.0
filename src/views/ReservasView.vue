@@ -60,6 +60,18 @@
       </select>
     </div>
 
+    <div
+      v-if="advertenciaContratos"
+      role="status"
+      class="mb-4 rounded-xl border p-3 text-xs flex flex-wrap items-center gap-2"
+      :class="isDark ? 'border-amber-900/40 bg-amber-950/20 text-amber-300' : 'border-amber-200 bg-amber-50 text-amber-800'"
+    >
+      <span class="flex-1">{{ advertenciaContratos }}</span>
+      <button type="button" class="font-bold underline" :disabled="store.loading || cargandoContratos" @click="cargarReservas()">
+        Reintentar
+      </button>
+    </div>
+
     <!-- Tabla -->
     <div
       class="rounded-2xl border shadow-sm overflow-hidden"
@@ -149,19 +161,20 @@
                         isDark
                           ? 'border-red-800 bg-red-950/40 text-[#f0a500] hover:bg-red-950/70 hover:border-red-700'
                           : 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100',
-                        !puedeModificarReserva(r) ? 'opacity-40 cursor-not-allowed' : '',
+                        !puedeEditarReserva(r) ? 'opacity-40 cursor-not-allowed' : '',
                       ]"
-                      :title="puedeModificarReserva(r) ? 'Editar reserva' : 'Solo las reservas pendientes se pueden editar'"
-                      :disabled="!puedeModificarReserva(r)"
+                      :title="puedeEditarReserva(r) ? 'Actualizar fechas' : 'Solo las reservas pendientes permiten actualizar fechas'"
+                      :disabled="!puedeEditarReserva(r)"
                       @click="abrirModalEditar(r)"
                     >
-                      <i class="pi pi-pencil text-xs"></i>
+                      <i class="pi pi-calendar text-xs"></i>
                     </button>
                   </div>
                   <button
-                    v-if="puedeModificarReserva(r)"
+                    v-if="puedeCancelarReserva(r)"
                     type="button"
                     class="acciones-piramide__cancelar"
+                    :disabled="guardandoCancelacion"
                     :class="isDark
                       ? 'border-red-900/60 bg-red-950/30 text-red-300 hover:bg-red-950/50'
                       : 'border-red-200 bg-white text-red-600 hover:bg-red-50'"
@@ -261,6 +274,8 @@ import { useReservasStore } from '@/stores/reservas'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { formatFecha } from '@/utils/reservaFormatters'
 import { toastSuccess } from '@/utils/toast'
+import api from '@/services/api'
+import { fetchAllPaginated } from '@/utils/apiPagination'
 
 const { isDark } = useAppTheme()
 const store = useReservasStore()
@@ -274,6 +289,11 @@ const reservaSeleccionada         = ref(null)
 const reservaACancelar            = ref(null)
 const guardandoEdicion            = ref(false)
 const guardandoCancelacion        = ref(false)
+const reservasConContrato         = ref(new Set())
+const contratosComprobados        = ref(false)
+const cargandoContratos           = ref(false)
+const advertenciaContratos        = ref('')
+let consultaContratosVersion = 0
 
 const reservas = computed(() => store.reservas)
 const pagination = computed(() => store.pagination)
@@ -302,9 +322,32 @@ function reservasParams(page = pagination.value.current_page || 1) {
 }
 
 async function cargarReservas(page = pagination.value.current_page || 1) {
-  await store.fetchReservas(reservasParams(page))
+  await Promise.all([
+    store.fetchReservas(reservasParams(page)),
+    cargarAsociacionesContratos(),
+  ])
   if (page > 1 && reservas.value.length === 0) {
     await store.fetchReservas(reservasParams(page - 1))
+  }
+}
+
+async function cargarAsociacionesContratos() {
+  const version = ++consultaContratosVersion
+  contratosComprobados.value = false
+  cargandoContratos.value = true
+  try {
+    const { items } = await fetchAllPaginated((params) => api.get('/admin/contratos', { params }))
+    if (version !== consultaContratosVersion) return
+    reservasConContrato.value = new Set(items
+      .map((contrato) => Number(contrato.reserva_id))
+      .filter((id) => Number.isInteger(id) && id > 0))
+    contratosComprobados.value = true
+    advertenciaContratos.value = ''
+  } catch {
+    if (version !== consultaContratosVersion) return
+    advertenciaContratos.value = 'No fue posible comprobar qué reservas confirmadas tienen contrato. Su cancelación permanece deshabilitada; puedes reintentar recargando el listado.'
+  } finally {
+    if (version === consultaContratosVersion) cargandoContratos.value = false
   }
 }
 
@@ -318,28 +361,45 @@ async function cambiarPagina(page) {
 }
 
 function abrirModalCancelar(reserva) {
-  reservaACancelar.value = reserva
+  if (guardandoCancelacion.value) return
+  const actual = reservas.value.find((r) => Number(r.id) === Number(reserva?.id))
+  if (!puedeCancelarReserva(actual)) return
+  reservaACancelar.value = actual
   modalCancelarAbierto.value = true
 }
 
 function cerrarModalCancelar() {
+  if (guardandoCancelacion.value) return
+  limpiarCancelacion()
+}
+
+function limpiarCancelacion() {
   modalCancelarAbierto.value = false
   reservaACancelar.value = null
 }
 
 async function confirmarCancelacion(motivo) {
-  if (!reservaACancelar.value?.id) return
+  if (guardandoCancelacion.value || !reservaACancelar.value?.id) return
   guardandoCancelacion.value = true
   try {
-    await store.cancelar(reservaACancelar.value.id, motivo)
+    const actual = reservas.value.find((r) => Number(r.id) === Number(reservaACancelar.value.id))
+    if (!puedeCancelarReserva(actual)) {
+      throw new Error('Esta reserva no admite cancelación o no se pudo comprobar que esté libre de contrato. Recarga el listado para verificarla.')
+    }
+    await store.cancelar(actual.id, motivo)
     await cargarReservas()
     toastSuccess('Reserva cancelada')
-    cerrarModalCancelar()
+    limpiarCancelacion()
   } catch (e) {
+    if (e.response?.status === 422) {
+      await cargarReservas()
+      const actual = reservas.value.find((r) => Number(r.id) === Number(reservaACancelar.value?.id))
+      if (!puedeCancelarReserva(actual)) limpiarCancelacion()
+    }
     await Swal.fire({
       icon: 'error',
       title: 'No se pudo cancelar',
-      text: e.response?.data?.message || store.error || 'Intenta de nuevo.',
+      text: e.response?.data?.message || e.message || store.error || 'Intenta de nuevo.',
       confirmButtonColor: '#922b21',
       background: isDark.value ? '#1f2937' : '#fff',
       color: isDark.value ? '#f3f4f6' : '#111827',
@@ -350,26 +410,33 @@ async function confirmarCancelacion(motivo) {
 }
 
 function abrirModalEditar(reserva) {
-  reservaSeleccionada.value = { ...reserva }
+  if (guardandoEdicion.value) return
+  const actual = reservas.value.find((r) => Number(r.id) === Number(reserva?.id))
+  if (!puedeEditarReserva(actual)) return
+  reservaSeleccionada.value = { ...actual }
   modalAbierto.value = true
 }
 
 function cerrarModal() {
+  if (guardandoEdicion.value) return
   modalAbierto.value = false
   reservaSeleccionada.value = null
 }
 
 async function guardarReserva(form) {
-  if (!reservaSeleccionada.value?.id) return
+  if (guardandoEdicion.value || !reservaSeleccionada.value?.id) return
+  const actual = reservas.value.find((r) => Number(r.id) === Number(reservaSeleccionada.value.id))
+  if (!puedeEditarReserva(actual)) return
   guardandoEdicion.value = true
   try {
-    await store.actualizar(reservaSeleccionada.value.id, {
+    await store.actualizar(actual.id, {
       fecha_inicio: form.fecha_inicio,
       fecha_fin:    form.fecha_fin,
     })
     await cargarReservas()
     toastSuccess('Reserva actualizada')
-    cerrarModal()
+    modalAbierto.value = false
+    reservaSeleccionada.value = null
   } catch (e) {
     await Swal.fire({
       icon: 'error',
@@ -384,8 +451,14 @@ async function guardarReserva(form) {
   }
 }
 
-function puedeModificarReserva(reserva) {
+function puedeEditarReserva(reserva) {
   return reserva?.estado === 'PENDIENTE'
+}
+
+function puedeCancelarReserva(reserva) {
+  if (!reserva?.id || reserva.contrato || reservasConContrato.value.has(Number(reserva.id))) return false
+  return reserva.estado === 'PENDIENTE'
+    || (reserva.estado === 'CONFIRMADA' && contratosComprobados.value)
 }
 
 function puedeGenerarContrato(reserva) {
@@ -415,7 +488,7 @@ function labelEstado(estado) {
 }
 
 function labelTipo(tipo) {
-  const map = { INMEDIATA: 'Renta directa', ANTISIPADA: 'Reserva', ANTICIPADA: 'Reserva' }
+  const map = { INMEDIATA: 'Reserva inmediata', ANTISIPADA: 'Reserva', ANTICIPADA: 'Reserva' }
   return map[tipo] || 'Reserva'
 }
 

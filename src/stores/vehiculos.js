@@ -7,6 +7,11 @@ function extraerListaApi(payload) {
   return extractListFromApi({ data: payload })
 }
 
+function limpiarPayloadVehiculo(form) {
+  const { estado, ...payload } = form || {}
+  return payload
+}
+
 export const useVehiculosStore = defineStore('vehiculos', () => {
   const vehiculos = ref([])
   const loading = ref(false)
@@ -143,7 +148,7 @@ export const useVehiculosStore = defineStore('vehiculos', () => {
     loading.value = true
     error.value = null
     try {
-      const res = await api.post('/admin/vehiculos', form)
+      const res = await api.post('/admin/vehiculos', limpiarPayloadVehiculo(form))
       vehiculos.value.unshift(res.data.data)
       return res.data.data
     } catch (e) {
@@ -158,12 +163,27 @@ export const useVehiculosStore = defineStore('vehiculos', () => {
     loading.value = true
     error.value = null
     try {
-      const res = await api.put(`/admin/vehiculos/${form.id}`, form)
+      const res = await api.put(`/admin/vehiculos/${form.id}`, limpiarPayloadVehiculo(form))
       const idx = vehiculos.value.findIndex((v) => v.id === form.id)
       if (idx !== -1) vehiculos.value[idx] = res.data.data
       return res.data.data
     } catch (e) {
       error.value = e.response?.data?.message || 'Error al actualizar vehículo.'
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+  async function restaurar(id, motivo_restauracion) {
+    loading.value = true
+    error.value = null
+    try {
+      const res = await api.patch(`/admin/vehiculos/${id}/restaurar`, { motivo_restauracion })
+      const idx = vehiculos.value.findIndex((v) => v.id === Number(id))
+      if (idx !== -1) vehiculos.value[idx] = res.data.data
+      return res.data.data
+    } catch (e) {
+      error.value = e.response?.data?.message || 'Error al restaurar vehículo.'
       throw e
     } finally {
       loading.value = false
@@ -188,5 +208,9 @@ export const useVehiculosStore = defineStore('vehiculos', () => {
     invalidarCatalogos,
     crear,
     actualizar,
+    restaurar,
   }
 })
+
+
+

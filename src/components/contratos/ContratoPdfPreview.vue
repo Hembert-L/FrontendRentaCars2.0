@@ -2,8 +2,8 @@
   <Teleport to="body">
     <div
       v-if="visible"
-      class="fixed inset-0 z-[60] flex flex-col bg-black/50"
-      @click.self="$emit('cerrar')"
+      class="fixed inset-0 z-[80] flex flex-col bg-black/50"
+      @click.self.stop="$emit('cerrar')"
     >
       <div class="flex flex-col mx-auto my-4 w-full max-w-4xl flex-1 max-h-[92vh] bg-white rounded-xl shadow-2xl overflow-hidden">
         <div class="flex items-center justify-between px-5 py-3 border-b bg-red-800 text-white">
@@ -11,7 +11,7 @@
             <p class="font-extrabold text-sm">Contrato PDF</p>
             <p class="text-xs opacity-80 font-mono">{{ contrato?.numero_contrato }}</p>
           </div>
-          <button type="button" class="w-8 h-8 rounded-lg hover:bg-white/10" @click="$emit('cerrar')">
+          <button type="button" class="w-8 h-8 rounded-lg hover:bg-white/10" @click.stop.prevent="$emit('cerrar')">
             <i class="pi pi-times"></i>
           </button>
         </div>
@@ -37,7 +37,7 @@
         </div>
 
         <div class="flex gap-3 p-4 border-t bg-white">
-          <button type="button" class="flex-1 py-2.5 rounded-lg border font-bold text-sm" @click="$emit('cerrar')">
+          <button type="button" class="flex-1 py-2.5 rounded-lg border font-bold text-sm" @click.stop.prevent="$emit('cerrar')">
             Cerrar
           </button>
           <button
@@ -128,3 +128,4 @@ watch(
 
 onBeforeUnmount(limpiar)
 </script>
+

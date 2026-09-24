@@ -3,8 +3,8 @@
     <Transition name="modal">
       <div
         v-if="visible"
-        class="veh-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4"
-        @click.self="$emit('cerrar')"
+        class="veh-modal-backdrop fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-4"
+        @click.self.stop="$emit('cerrar')"
       >
         <div class="veh-modal-shell w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden" @click.stop>
           <!-- Header -->
@@ -15,7 +15,7 @@
                 {{ modoEdicion ? 'Editar vehículo' : 'Alta de vehículo' }}
               </h2>
             </div>
-            <button type="button" class="veh-close-btn" @click="$emit('cerrar')">
+            <button type="button" class="veh-close-btn" @click.stop.prevent="$emit('cerrar')">
               <i class="pi pi-times"></i>
             </button>
           </div>
@@ -275,7 +275,7 @@
 
               <!-- Footer -->
               <div class="veh-footer flex-shrink-0 px-5 py-4 flex gap-2 border-t" :class="isDark ? 'border-gray-800' : 'border-gray-100'">
-                <button type="button" class="veh-btn veh-btn--ghost flex-1" @click="$emit('cerrar')">
+                <button type="button" class="veh-btn veh-btn--ghost flex-1" @click.stop.prevent="$emit('cerrar')">
                   Cancelar
                 </button>
                 <button
@@ -990,3 +990,4 @@ defineExpose({ aplicarErroresBackend })
   to { opacity: 1; transform: translateY(0); }
 }
 </style>
+

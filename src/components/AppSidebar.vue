@@ -5,15 +5,25 @@
       collapsed ? 'w-16' : 'w-64',
     ]"
   >
-    <div class="flex items-center gap-3 px-4 py-5 border-b border-red-900/40 min-h-[64px]">
-      <div class="flex-shrink-0 w-9 h-9 rounded-lg overflow-hidden">
+    <div
+      class="sidebar-brand border-b border-red-900/40 min-h-[64px]"
+      :class="{ 'sidebar-brand--collapsed': collapsed }"
+    >
+      <div class="sidebar-logo">
         <img :src="logoElGuayabo" alt="El Guayabo RentCar" class="w-full h-full object-contain" />
       </div>
-      <div v-if="!collapsed" class="flex flex-col leading-tight">
+      <div class="sidebar-title" :class="{ 'sidebar-title--collapsed': collapsed }">
         <span class="text-white font-extrabold text-base tracking-widest uppercase">RentaCar</span>
       </div>
-      <button class="ml-auto transition-colors" style="color: #f0a500" @click="toggleCollapse">
-        <i :class="collapsed ? 'pi pi-angle-right' : 'pi pi-angle-left'" class="text-base"></i>
+      <button
+        type="button"
+        class="sidebar-collapse-btn"
+        :class="{ 'sidebar-collapse-btn--collapsed': collapsed }"
+        :title="collapsed ? 'Expandir menú' : 'Contraer menú'"
+        :aria-label="collapsed ? 'Expandir menú' : 'Contraer menú'"
+        @click="toggleCollapse"
+      >
+        <i :class="collapsed ? 'pi pi-angle-right' : 'pi pi-angle-left'" class="text-sm"></i>
       </button>
     </div>
 
@@ -34,6 +44,7 @@
           @click="navegar('dashboard')"
         />
         <SidebarItem
+          v-if="puedeOperar"
           icon="pi-users"
           label="Clientes"
           :collapsed="collapsed"
@@ -41,6 +52,7 @@
           @click="navegar('clientes')"
         />
         <SidebarItem
+          v-if="puedeOperar"
           icon="pi-car"
           label="Vehículos"
           :collapsed="collapsed"
@@ -48,6 +60,7 @@
           @click="navegar('vehiculos')"
         />
         <SidebarItem
+          v-if="puedeOperar"
           icon="pi-calendar"
           label="Reservas"
           :collapsed="collapsed"
@@ -55,6 +68,7 @@
           @click="navegar('reservas')"
         />
         <SidebarItem
+          v-if="puedeOperar"
           icon="pi-file"
           label="Contratos"
           :collapsed="collapsed"
@@ -63,7 +77,7 @@
         />
       </div>
 
-      <div>
+      <div v-if="puedeOperar">
         <p
           v-if="!collapsed"
           class="text-xs font-bold tracking-widest uppercase px-3 mb-2"
@@ -96,7 +110,7 @@
 
       <div>
         <p
-          v-if="!collapsed"
+          v-if="!collapsed && authStore.isAdmin"
           class="text-xs font-bold tracking-widest uppercase px-3 mb-2"
           style="color: #f0a50088"
         >
@@ -145,6 +159,9 @@ import logoElGuayabo from "@/assets/logo-el-guayabo.png";
 
 const themeStore = useThemeStore();
 const authStore = useAuthStore();
+const puedeOperar = computed(() =>
+  authStore.userRoles.some((role) => ["ADMINISTRADOR", "EMPLEADO"].includes(role)),
+);
 const darkSwitch = computed({
   get: () => themeStore.isDark,
   set: (v) => themeStore.setDark(v),
@@ -176,3 +193,85 @@ function navegar(ruta) {
   router.push("/" + ruta);
 }
 </script>
+
+<style scoped>
+.sidebar-brand {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr) 2.15rem;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.25rem 1rem;
+  transition:
+    grid-template-columns 0.3s ease,
+    gap 0.3s ease,
+    padding 0.3s ease;
+}
+
+.sidebar-brand--collapsed {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  align-content: center;
+  gap: 0.55rem;
+  min-height: auto;
+  padding: 0.7rem 0.5rem 0.8rem;
+}
+
+.sidebar-logo {
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 0.5rem;
+}
+
+.sidebar-title {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 1;
+  transform: translateX(0);
+  transition:
+    opacity 0.2s ease,
+    max-width 0.3s ease,
+    transform 0.3s ease;
+}
+
+.sidebar-title--collapsed {
+  display: none;
+  max-width: 0;
+  opacity: 0;
+  transform: translateX(-0.5rem);
+}
+
+.sidebar-collapse-btn {
+  width: 2.15rem;
+  height: 2.15rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(240, 165, 0, 0.36);
+  border-radius: 999px;
+  background: rgba(89, 20, 14, 0.34);
+  color: #f0a500;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition:
+    width 0.3s ease,
+    height 0.3s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.sidebar-collapse-btn:hover {
+  background: rgba(240, 165, 0, 0.14);
+  border-color: rgba(240, 165, 0, 0.62);
+  color: #ffd166;
+  transform: translateY(-1px);
+}
+
+.sidebar-collapse-btn--collapsed {
+  width: 1.8rem;
+  height: 1.8rem;
+}
+</style>

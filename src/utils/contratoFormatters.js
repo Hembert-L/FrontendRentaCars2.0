@@ -1,3 +1,5 @@
+import { fechaHoyLocal, fechaSoloISO } from './reservaFormatters'
+
 export const HORAS_PERMITIDAS = ['06:00', '06:30', '07:00', '18:00', '18:30', '19:00']
 
 /** Hora 24h (HH:mm) -> formato 12h legible, ej. "6:00 a. m." */
@@ -45,12 +47,17 @@ export function formatFechaHora12(valor) {
 }
 
 export const NIVELES_COMBUSTIBLE = [
-  { value: 'VACIO', label: 'Vacío', pct: 0 },
+  { value: 'E', label: 'Vacío', pct: 0 },
   { value: '1/4', label: '1/4', pct: 25 },
   { value: '1/2', label: '1/2', pct: 50 },
   { value: '3/4', label: '3/4', pct: 75 },
-  { value: 'LLENO', label: 'Lleno', pct: 100 },
+  { value: 'F', label: 'Lleno', pct: 100 },
 ]
+
+export function normalizarNivelCombustible(valor) {
+  const nivelesLegacy = { VACIO: 'E', LLENO: 'F' }
+  return nivelesLegacy[valor] || valor
+}
 
 export function moneyCents(value) {
   const n = Number(value)
@@ -142,15 +149,18 @@ export function metodoPagoIcon(metodo) {
 
 export function documentosVigentes(cliente) {
   if (!cliente) return { ok: false, duiVencido: false, licenciaVencida: true }
-  const hoy = new Date()
-  hoy.setHours(0, 0, 0, 0)
-  const licencia = cliente.vencimiento_licencia ? new Date(cliente.vencimiento_licencia + 'T00:00:00') : null
-  const licenciaVencida = !licencia || licencia < hoy
+  // Compara días calendario locales, sin convertir las fechas de la API a UTC.
+  const licencia = fechaSoloISO(cliente.vencimiento_licencia)
+  const [anio, mes, dia] = licencia.split('-').map(Number)
+  const fecha = new Date(anio, mes - 1, dia)
+  const fechaValida = fecha.getFullYear() === anio && fecha.getMonth() === mes - 1 && fecha.getDate() === dia
+  const licenciaVencida = !fechaValida || licencia <= fechaHoyLocal()
   return { ok: !licenciaVencida, duiVencido: false, licenciaVencida }
 }
 
 export function nivelCombustiblePct(valor) {
-  return NIVELES_COMBUSTIBLE.find((n) => n.value === valor)?.pct ?? 0
+  const nivel = normalizarNivelCombustible(valor)
+  return NIVELES_COMBUSTIBLE.find((n) => n.value === nivel)?.pct ?? 0
 }
 
 const ESTADOS_CARGO_COBRABLE = ['PENDIENTE', 'APLICADO']

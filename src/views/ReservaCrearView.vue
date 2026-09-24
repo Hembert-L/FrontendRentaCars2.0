@@ -1,75 +1,78 @@
 <template>
-  <div class="min-h-screen" :class="isDark ? 'bg-gray-950' : 'bg-gray-50'">
-    <div class="flex items-center gap-3 mb-6">
-      <button
-        type="button"
-        @click="volver"
-        class="w-10 h-10 rounded-xl flex items-center justify-center border transition-all hover:shadow-sm"
-        :class="
-          isDark
-            ? 'border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700'
-            : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-        "
-        title="Volver"
-      >
-        <i class="pi pi-arrow-left text-sm"></i>
-      </button>
-      <div>
-        <h1 class="text-2xl font-extrabold" :class="isDark ? 'text-gray-100' : 'text-gray-900'">
-          Nueva reserva
-        </h1>
-        <p class="text-sm mt-0.5" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
-          Completa los datos para registrar la reserva
-        </p>
+  <div class="reserva-wizard-root" :class="isDark ? 'bg-gray-950' : 'bg-gray-50'">
+    <div class="reserva-wizard-body">
+      <div class="reserva-wizard-main">
+        <div class="reserva-wizard-header">
+          <button
+            type="button"
+            @click="volver"
+            class="w-10 h-10 rounded-xl flex items-center justify-center border transition-all hover:shadow-sm"
+            :class="
+              isDark
+                ? 'border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700'
+                : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+            "
+            title="Volver"
+          >
+            <i class="pi pi-arrow-left text-sm"></i>
+          </button>
+          <div>
+            <h1 class="text-2xl font-extrabold" :class="isDark ? 'text-gray-100' : 'text-gray-900'">
+              Nueva reserva
+            </h1>
+            <p class="text-sm mt-0.5" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
+              Completa los datos para registrar la reserva
+            </p>
+          </div>
+        </div>
+
+        <div class="space-y-5">
+          <ReservaClienteBuscar
+            v-model:busqueda="busquedaCliente"
+            :cliente-seleccionado="clienteSeleccionado"
+            :resultados="resultadosClientes"
+            :buscando="buscandoClientes"
+            :error="errorListadoClientes"
+            :paginacion="paginacionClientes"
+            @buscar="onBuscarCliente"
+            @seleccionar="seleccionarCliente"
+            @limpiar="limpiarCliente"
+            @cambiar-pagina="cambiarPaginaClientes"
+            @agregar-nuevo="abrirModalCliente"
+          />
+
+          <ReservaFechas
+            v-if="clientePuedeReservar"
+            v-model:fecha-inicio="fechaInicio"
+            v-model:fecha-fin="fechaFin"
+            v-model:tipo-reserva="tipoReserva"
+            :hoy="hoy"
+            :min-fecha-inicio="minFechaInicio"
+            :error-inicio="errorFechaInicio"
+            :error-fin="errorFechaFin"
+            :dias-reserva="diasReserva"
+            :tipo-reserva="tipoReserva"
+            @change="onFechasChange"
+          />
+
+          <ReservaVehiculosDisponibles
+            v-if="clientePuedeReservar"
+            :fecha-inicio="fechaInicio"
+            :fecha-fin="fechaFin"
+            :vehiculos="vehiculosDisponibles"
+            :vehiculo-seleccionado="vehiculoSeleccionado"
+            :cargando="cargandoVehiculos"
+            :consultados="vehiculosConsultados"
+            @seleccionar="seleccionarVehiculo"
+          />
+
+          <p v-if="errorGlobal" class="text-sm text-center font-medium" style="color: #c0392b">
+            {{ errorGlobal }}
+          </p>
+        </div>
       </div>
-    </div>
 
-    <div
-      class="grid grid-cols-1 lg:grid-cols-[1fr_300px] xl:grid-cols-[1fr_320px] gap-5 items-start"
-    >
-      <div class="space-y-5 order-2 lg:order-1">
-        <ReservaClienteBuscar
-          v-model:busqueda="busquedaCliente"
-          :cliente-seleccionado="clienteSeleccionado"
-          :resultados="resultadosClientes"
-          :buscando="buscandoClientes"
-          @buscar="onBuscarCliente"
-          @seleccionar="seleccionarCliente"
-          @limpiar="limpiarCliente"
-          @agregar-nuevo="abrirModalCliente"
-        />
-
-        <ReservaFechas
-          v-if="clienteSeleccionado"
-          v-model:fecha-inicio="fechaInicio"
-          v-model:fecha-fin="fechaFin"
-          v-model:tipo-reserva="tipoReserva"
-          :hoy="hoy"
-          :min-fecha-inicio="minFechaInicio"
-          :error-inicio="errorFechaInicio"
-          :error-fin="errorFechaFin"
-          :dias-reserva="diasReserva"
-          :tipo-reserva="tipoReserva"
-          @change="onFechasChange"
-        />
-
-        <ReservaVehiculosDisponibles
-          v-if="clienteSeleccionado"
-          :fecha-inicio="fechaInicio"
-          :fecha-fin="fechaFin"
-          :vehiculos="vehiculosDisponibles"
-          :vehiculo-seleccionado="vehiculoSeleccionado"
-          :cargando="cargandoVehiculos"
-          :consultados="vehiculosConsultados"
-          @seleccionar="seleccionarVehiculo"
-        />
-
-        <p v-if="errorGlobal" class="text-sm text-center font-medium" style="color: #c0392b">
-          {{ errorGlobal }}
-        </p>
-      </div>
-
-      <div class="order-1 lg:order-2 lg:sticky lg:top-24 lg:self-start">
+      <div class="reserva-wizard-summary">
         <ReservaResumen
           :cliente="clienteSeleccionado"
           :fecha-inicio="fechaInicio"
@@ -97,9 +100,8 @@
     />
   </div>
 </template>
-
 <script setup>
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import ClientesModal from "@/components/clientes/ClientesModal.vue";
@@ -111,6 +113,7 @@ import { useClientesStore } from "@/stores/clientes";
 import { useReservasStore } from "@/stores/reservas";
 import { useAppTheme } from "@/composables/useAppTheme";
 import { fechaHoyLocal, sumarDiasISO, diasEntreFechasISO } from "@/utils/reservaFormatters";
+import { documentosVigentes } from "@/utils/contratoFormatters";
 import { toastSuccess } from "@/utils/toast";
 
 const router = useRouter();
@@ -119,14 +122,25 @@ const clientesStore = useClientesStore();
 const reservasStore = useReservasStore();
 
 const clienteSeleccionado = ref(null);
+const clientePuedeReservar = computed(() => documentosVigentes(clienteSeleccionado.value).ok);
+const mensajeLicencia = "No se puede reservar: la licencia debe vencer después de hoy. Actualiza la licencia desde Clientes para continuar.";
 const busquedaCliente = ref("");
 const resultadosClientes = ref([]);
 const buscandoClientes = ref(false);
+const errorListadoClientes = ref("");
+const paginacionClientes = ref({
+  current_page: 1,
+  last_page: 1,
+  total: 0,
+});
 const modalClienteAbierto = ref(false);
 const guardandoCliente = ref(false);
 const erroresCliente = ref({});
 const errorCliente = ref('');
 let debounceTimer = null;
+let consultaClientesVersion = 0;
+let consultaVehiculosTimer = null;
+let consultaVehiculosVersion = 0;
 
 const fechaInicio = ref("");
 const fechaFin = ref("");
@@ -186,7 +200,7 @@ const precioEstimado = computed(() => {
 
 const puedeConfirmar = computed(
   () =>
-    !!clienteSeleccionado.value &&
+    clientePuedeReservar.value &&
     !!fechaInicio.value &&
     !!fechaFin.value &&
     !!tipoReserva.value &&
@@ -195,37 +209,60 @@ const puedeConfirmar = computed(
     !errorFechaFin.value,
 );
 
+async function cargarClientes(page = 1) {
+  const version = ++consultaClientesVersion;
+  buscandoClientes.value = true;
+  errorListadoClientes.value = "";
+  await clientesStore.fetchClientes({
+    page,
+    ...(busquedaCliente.value.trim() ? { search: busquedaCliente.value.trim() } : {}),
+  });
+  if (version !== consultaClientesVersion) return;
+  resultadosClientes.value = [...clientesStore.clientes];
+  paginacionClientes.value = { ...clientesStore.pagination };
+  errorListadoClientes.value = clientesStore.error || "";
+  buscandoClientes.value = false;
+}
+
 function onBuscarCliente() {
   clearTimeout(debounceTimer);
-  if (!busquedaCliente.value.trim()) {
-    resultadosClientes.value = [];
-    return;
-  }
-  debounceTimer = setTimeout(async () => {
-    buscandoClientes.value = true;
-    resultadosClientes.value = await clientesStore.buscarClientes(busquedaCliente.value);
-    buscandoClientes.value = false;
+  debounceTimer = setTimeout(() => {
+    cargarClientes(1);
   }, 300);
 }
 
+function cambiarPaginaClientes(page) {
+  if (
+    buscandoClientes.value
+    || page < 1
+    || page > paginacionClientes.value.last_page
+    || page === paginacionClientes.value.current_page
+  ) return;
+  cargarClientes(page);
+}
+
 function seleccionarCliente(c) {
+  clearTimeout(debounceTimer);
+  debounceTimer = null;
   clienteSeleccionado.value = c;
-  busquedaCliente.value = c.nombre;
-  resultadosClientes.value = [];
   errorGlobal.value = "";
 }
 
 function limpiarCliente() {
+  clearTimeout(debounceTimer);
+  debounceTimer = null;
   clienteSeleccionado.value = null;
-  busquedaCliente.value = "";
-  resultadosClientes.value = [];
+  errorGlobal.value = "";
+}
+
+function limpiarDatosReserva() {
   fechaInicio.value = "";
   fechaFin.value = "";
   tipoReserva.value = "";
-  vehiculosDisponibles.value = [];
-  vehiculoSeleccionado.value = null;
-  vehiculosConsultados.value = false;
+  onFechasChange();
 }
+
+watch([clienteSeleccionado, clientePuedeReservar], limpiarDatosReserva, { flush: "sync" });
 
 function abrirModalCliente() {
   erroresCliente.value = {};
@@ -239,6 +276,11 @@ async function onClienteCreado(form) {
   errorCliente.value = '';
   try {
     const creado = await clientesStore.crear(form);
+    resultadosClientes.value = [
+      creado,
+      ...resultadosClientes.value.filter((cliente) => cliente.id !== creado.id),
+    ];
+    paginacionClientes.value.total = Number(paginacionClientes.value.total || 0) + 1;
     seleccionarCliente(creado);
     modalClienteAbierto.value = false;
     toastSuccess("Cliente registrado", `${creado.nombre} se agregó correctamente.`);
@@ -253,8 +295,13 @@ async function onClienteCreado(form) {
 }
 
 function onFechasChange() {
+  clearTimeout(consultaVehiculosTimer);
+  consultaVehiculosTimer = null;
+  consultaVehiculosVersion++;
+  errorGlobal.value = "";
   errorFechaInicio.value = "";
   errorFechaFin.value = "";
+  cargandoVehiculos.value = false;
   vehiculosConsultados.value = false;
   vehiculosDisponibles.value = [];
   vehiculoSeleccionado.value = null;
@@ -292,37 +339,51 @@ function validarFechas() {
 }
 
 async function consultarVehiculos() {
-  if (!validarFechas()) return;
+  if (!documentosVigentes(clienteSeleccionado.value).ok || !validarFechas()) return;
+  const version = ++consultaVehiculosVersion;
   errorGlobal.value = "";
   cargandoVehiculos.value = true;
   vehiculosConsultados.value = false;
   vehiculoSeleccionado.value = null;
+  vehiculosDisponibles.value = [];
   try {
-    vehiculosDisponibles.value = await reservasStore.fetchVehiculosDisponibles(
+    const disponibles = await reservasStore.fetchVehiculosDisponiblesParaReserva(
       fechaInicio.value,
       fechaFin.value,
     );
+    if (version !== consultaVehiculosVersion || !documentosVigentes(clienteSeleccionado.value).ok) return;
+    vehiculosDisponibles.value = disponibles;
     vehiculosConsultados.value = true;
   } catch (e) {
-    errorGlobal.value = e.response?.data?.message || "No se pudieron consultar los vehículos.";
+    if (version !== consultaVehiculosVersion || !documentosVigentes(clienteSeleccionado.value).ok) return;
+    errorGlobal.value = e.response?.data?.message || e.message || "No se pudieron consultar los vehículos.";
     vehiculosDisponibles.value = [];
-    vehiculosConsultados.value = true;
+    vehiculosConsultados.value = false;
   } finally {
-    cargandoVehiculos.value = false;
+    if (version === consultaVehiculosVersion) cargandoVehiculos.value = false;
   }
 }
 
-let consultaVehiculosTimer = null;
 watch([fechaInicio, fechaFin], () => {
   onFechasChange();
-  clearTimeout(consultaVehiculosTimer);
-  if (!fechaInicio.value || !fechaFin.value) return;
+  if (!clientePuedeReservar.value || !fechaInicio.value || !fechaFin.value) return;
   consultaVehiculosTimer = setTimeout(() => {
-    if (validarFechas()) consultarVehiculos();
+    consultaVehiculosTimer = null;
+    consultarVehiculos();
   }, 400);
 });
 
+onMounted(() => cargarClientes(1));
+
+onUnmounted(() => {
+  clearTimeout(debounceTimer);
+  clearTimeout(consultaVehiculosTimer);
+  consultaClientesVersion++;
+  consultaVehiculosVersion++;
+});
+
 function seleccionarVehiculo(v) {
+  if (!documentosVigentes(clienteSeleccionado.value).ok) return;
   vehiculoSeleccionado.value = v;
   errorGlobal.value = "";
 }
@@ -330,6 +391,11 @@ function seleccionarVehiculo(v) {
 async function confirmarReserva() {
   if (!clienteSeleccionado.value) {
     errorGlobal.value = "Selecciona un cliente.";
+    return;
+  }
+  if (!documentosVigentes(clienteSeleccionado.value).ok) {
+    limpiarDatosReserva();
+    errorGlobal.value = mensajeLicencia;
     return;
   }
   if (!validarFechas()) return;
@@ -393,3 +459,67 @@ function volver() {
   router.push({ name: "reservas" });
 }
 </script>
+
+<style scoped>
+.reserva-wizard-root {
+  min-height: 100vh;
+}
+
+.reserva-wizard-body {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+  width: 100%;
+  margin: 0;
+  padding: 0 1.5rem 2rem;
+  box-sizing: border-box;
+  align-items: start;
+}
+
+.reserva-wizard-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.reserva-wizard-main,
+.reserva-wizard-summary {
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  :global(html:has(.reserva-wizard-root)),
+  :global(body:has(.reserva-wizard-root)) {
+    overflow: hidden;
+  }
+
+  .reserva-wizard-root {
+    height: calc(100vh - 6.5rem);
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .reserva-wizard-body {
+    height: 100%;
+    min-height: 0;
+    grid-template-columns: minmax(0, 7fr) minmax(320px, 3fr);
+    padding-bottom: 1rem;
+    overflow: hidden;
+    align-items: stretch;
+  }
+
+  .reserva-wizard-main {
+    height: 100%;
+    overflow-y: auto;
+    padding-right: 0.35rem;
+    scrollbar-gutter: stable;
+  }
+
+  .reserva-wizard-summary {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+}
+</style>

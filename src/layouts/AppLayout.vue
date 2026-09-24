@@ -20,29 +20,45 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
-import { storeToRefs } from 'pinia'
-import { useThemeStore } from '@/stores/theme'
-import { useAuthStore } from '@/stores/auth'
-import { useNotificacionesStore } from '@/stores/notificaciones'
-import AppSidebar from '@/components/AppSidebar.vue'
-import AppHeader from '@/components/AppHeader.vue'
+import { ref, onMounted, onUnmounted } from "vue";
+import { storeToRefs } from "pinia";
+import { useThemeStore } from "@/stores/theme";
+import { useAuthStore } from "@/stores/auth";
+import { useNotificacionesStore } from "@/stores/notificaciones";
+import AppSidebar from "@/components/AppSidebar.vue";
+import AppHeader from "@/components/AppHeader.vue";
 
-const sidebarCollapsed = ref(false)
-const { isDark } = storeToRefs(useThemeStore())
-const authStore = useAuthStore()
-const notificacionesStore = useNotificacionesStore()
+const sidebarCollapsed = ref(false);
+const { isDark } = storeToRefs(useThemeStore());
+const authStore = useAuthStore();
+const notificacionesStore = useNotificacionesStore();
 
-let pollingId = null
+let pollingId = null;
+let desmontado = false;
 
-onMounted(() => {
-  if (authStore.isAuthenticated) {
-    authStore.me().catch(() => {})
-    pollingId = notificacionesStore.iniciarPolling(60000)
+function puedeConsultarNotificaciones() {
+  return authStore.userRoles.some((role) => ["ADMINISTRADOR", "EMPLEADO"].includes(role));
+}
+
+onMounted(async () => {
+  if (!authStore.isAuthenticated) return;
+
+  try {
+    await authStore.me();
+  } catch {
+    // Conserva el rol local para decidir si se permite el polling.
   }
-})
+
+  if (!desmontado && authStore.isAuthenticated && puedeConsultarNotificaciones() && pollingId === null) {
+    pollingId = notificacionesStore.iniciarPolling(60000);
+  }
+});
 
 onUnmounted(() => {
-  if (pollingId) clearInterval(pollingId)
-})
+  desmontado = true;
+  if (pollingId !== null) {
+    clearInterval(pollingId);
+    pollingId = null;
+  }
+});
 </script>

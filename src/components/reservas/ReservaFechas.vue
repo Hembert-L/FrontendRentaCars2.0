@@ -42,30 +42,14 @@
     </div>
 
     <div
-      class="mt-4 p-3 rounded-xl flex items-start gap-3 border-l-4"
-      :class="isDark ? 'bg-gray-800/60 text-gray-300' : 'bg-gray-50 text-gray-600'"
-      style="border-left-color:#922b21;"
-    >
-      <i class="pi pi-calendar-plus text-base dias-banner-icon mt-0.5"></i>
-      <div>
-        <p class="text-sm font-bold" :class="isDark ? 'text-gray-100' : 'text-gray-900'">Reserva</p>
-        <p class="text-xs mt-0.5">
-          La reserva aparta el vehículo para el rango seleccionado. El contrato se genera cuando corresponda iniciar la renta.
-        </p>
-      </div>
-    </div>
-
-    <div
       v-if="fechaInicio && fechaFin && !errorInicio && !errorFin"
-      class="mt-4 p-3 rounded-xl flex items-center gap-3 border-l-4"
+      class="mt-4 px-3 py-2.5 rounded-xl flex flex-wrap items-center gap-x-3 gap-y-1 border-l-4"
       :class="isDark ? 'bg-gray-800/60' : 'bg-gray-50'"
       style="border-left-color:#922b21;"
     >
-      <i class="pi pi-clock text-lg dias-banner-icon"></i>
-      <div>
-        <p class="text-sm font-bold" :class="isDark ? 'text-gray-100' : 'text-gray-900'">{{ diasReserva }} día{{ diasReserva !== 1 ? 's' : '' }} de renta</p>
-        <p class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">{{ formatFecha(fechaInicio) }} -> {{ formatFecha(fechaFin) }}</p>
-      </div>
+      <i class="pi pi-clock text-base dias-banner-icon"></i>
+      <strong class="text-sm" :class="isDark ? 'text-gray-100' : 'text-gray-900'">{{ diasReserva }} día{{ diasReserva !== 1 ? 's' : '' }}</strong>
+      <span class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">{{ formatFecha(fechaInicio) }} → {{ formatFecha(fechaFin) }}</span>
     </div>
   </section>
 </template>
@@ -115,4 +99,3 @@ function sumarUnDia(fecha) {
 .form-section-dark .field-input.error { border-color:#f87171; background:#450a0a; }
 .form-section-dark .field-input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.85); }
 </style>
-

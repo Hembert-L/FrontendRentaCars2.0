@@ -229,7 +229,7 @@ function abrirNotificacion(notif) {
   marcarLeida(notif.id)
   panelAbierto.value = false
   if (notif.ruta) {
-    router.push({ name: notif.ruta })
+    router.push(typeof notif.ruta === 'string' ? { name: notif.ruta } : notif.ruta)
   }
 }
 
@@ -367,3 +367,4 @@ function toggleLeida(notif) {
   background: transparent;
 }
 </style>
+

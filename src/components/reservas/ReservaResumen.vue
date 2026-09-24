@@ -236,6 +236,19 @@ function iconClass(completo) {
 </script>
 
 <style scoped>
+.resumen-panel {
+  width: 100%;
+}
+
+@media (min-width: 1024px) {
+  .resumen-panel {
+    height: 100%;
+    max-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+}
+
 .resumen-etiqueta {
   font-size: 0.65rem;
   font-weight: 800;

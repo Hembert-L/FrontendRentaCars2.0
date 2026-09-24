@@ -3,9 +3,9 @@
     <Transition name="modal">
       <div
         v-if="visible"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        class="fixed inset-0 z-[80] flex items-center justify-center p-4"
         style="background:rgba(0,0,0,0.45);"
-        @click.self="$emit('cerrar')"
+        @click.self.stop="$emit('cerrar')"
       >
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center" @click.stop>
           <div class="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4" style="background:#fee2e2;">
@@ -17,11 +17,13 @@
           </p>
           <div class="flex gap-3">
             <button
-              @click="$emit('cerrar')"
+              type="button"
+              @click.stop.prevent="$emit('cerrar')"
               class="flex-1 py-2.5 rounded-xl font-bold text-sm border-2 border-gray-200 text-gray-500 hover:bg-gray-50 transition-all"
             >Cancelar</button>
             <button
-              @click="$emit('confirmar')"
+              type="button"
+              @click.stop.prevent="$emit('confirmar')"
               class="flex-1 py-2.5 rounded-xl font-bold text-sm text-white transition-all hover:opacity-90"
               style="background:#c0392b;"
             >Eliminar</button>

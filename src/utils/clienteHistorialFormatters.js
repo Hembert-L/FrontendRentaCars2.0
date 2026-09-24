@@ -4,6 +4,8 @@ const EMPTY = '—'
 
 export function labelTipoHistorial(tipo) {
   const map = {
+    'DANIO ESTETICO': 'Daño estético',
+    'DANIO MECANICO': 'Daño mecánico',
     'DEUDA PENDIENTE': 'Deuda pendiente',
     'DANIO VEHICULO': 'Daño vehículo',
     DANIO: 'Daño',
@@ -100,7 +102,7 @@ export function labelEstadoReserva(estado) {
 
 export function labelTipoReserva(tipo) {
   const map = {
-    INMEDIATA: 'Renta directa',
+    INMEDIATA: 'Reserva inmediata',
     ANTICIPADA: 'Reserva',
   }
   return map[tipo] || tipo || EMPTY

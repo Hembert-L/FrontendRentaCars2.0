@@ -97,6 +97,10 @@
                 <span class="text-xs font-bold px-2 py-1 rounded-full" :style="tipoStyle(m.tipo_mantenimiento)">
                   {{ labelTipo(m.tipo_mantenimiento) }}
                 </span>
+                <p v-if="m.incidencia_id || m.incidencia" class="text-xs mt-2 max-w-[14rem] break-words" :class="isDark ? 'text-gray-400' : 'text-gray-600'">
+                  Incidencia #{{ m.incidencia_id || m.incidencia.id }}<template v-if="m.incidencia"> · {{ m.incidencia.tipo_incidencia }}</template>
+                  <span v-if="m.incidencia?.estado_incidencia" class="block">{{ m.incidencia.estado_incidencia }}</span>
+                </p>
               </td>
               <td class="px-5 py-4 text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-600'">
                 {{ formatFecha(m.fecha) }}
@@ -302,13 +306,13 @@ function cambiarPagina(page) {
 async function buscarVehiculosDisponibles(search = '') {
   vehiculosModalLoading.value = true
   try {
-    const params = { estado: 'DISPONIBLE' }
+    const params = {}
     if (search.trim()) params.search = search.trim()
     const { items } = await fetchAllPaginated(
       (requestParams) => api.get('/admin/vehiculos', { params: requestParams }),
       params,
     )
-    vehiculosModal.value = items
+    vehiculosModal.value = items.filter((v) => ['DISPONIBLE', 'EN PROCESO'].includes(v.estado))
   } catch {
     vehiculosModal.value = []
   } finally {
@@ -317,6 +321,7 @@ async function buscarVehiculosDisponibles(search = '') {
 }
 
 async function abrirModalCrear() {
+  if (guardando.value) return
   modoEdicion.value = false
   seleccionado.value = null
   modalAbierto.value = true
@@ -324,6 +329,7 @@ async function abrirModalCrear() {
 }
 
 function abrirModalEditar(m) {
+  if (guardando.value) return
   modoEdicion.value = true
   seleccionado.value = m
   vehiculosModal.value = m.vehiculo ? [m.vehiculo] : []
@@ -331,11 +337,13 @@ function abrirModalEditar(m) {
 }
 
 function cerrarModal() {
+  if (guardando.value) return
   modalAbierto.value = false
   seleccionado.value = null
 }
 
 async function guardar(form) {
+  if (guardando.value) return
   guardando.value = true
   try {
     if (modoEdicion.value && seleccionado.value?.id) {
@@ -344,7 +352,8 @@ async function guardar(form) {
       await store.crear(form)
     }
     toastSuccess(modoEdicion.value ? 'Mantenimiento actualizado' : 'Mantenimiento registrado')
-    cerrarModal()
+    modalAbierto.value = false
+    seleccionado.value = null
     await Promise.all([
       aplicarFiltros(),
       buscarVehiculosDisponibles(),

@@ -1,9 +1,9 @@
-﻿<template>
+<template>
   <section class="form-section rounded-2xl border shadow-sm p-5 sm:p-6 space-y-4" :class="shellClass">
     <label class="field-label">{{ modoDirecto ? 'Vehículo y duración' : 'Fechas, horarios y vehículo' }}</label>
     <p class="text-xs mb-2 -mt-2" :class="isDark ? 'text-gray-500' : 'text-gray-400'">
       {{ modoDirecto
-        ? 'La renta directa inicia hoy. Selecciona la fecha de devolución para calcular los días acordados.'
+        ? 'El contrato inicia hoy. Selecciona la fecha de devolución para calcular los días acordados.'
         : 'Horarios permitidos: 6:00-7:00 AM y 6:00-7:00 PM. Los vehículos se consultan al elegir fechas.' }}
     </p>
 

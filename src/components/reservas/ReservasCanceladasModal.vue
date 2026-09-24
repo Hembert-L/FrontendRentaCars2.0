@@ -3,9 +3,9 @@
     <Transition name="modal">
       <div
         v-if="visible"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        class="fixed inset-0 z-[80] flex items-center justify-center p-4"
         style="background:rgba(0,0,0,0.45);"
-        @click.self="$emit('cerrar')"
+        @click.self.stop="$emit('cerrar')"
       >
         <div
           class="rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden modal-shell"
@@ -28,7 +28,7 @@
                   </p>
                 </div>
               </div>
-              <button type="button" class="modal-close" @click="$emit('cerrar')">
+              <button type="button" class="modal-close" @click.stop.prevent="$emit('cerrar')">
                 <i class="pi pi-times text-xs"></i>
               </button>
             </div>
@@ -154,7 +154,7 @@
                 Siguiente
                 <i class="pi pi-chevron-right text-[0.6rem]"></i>
               </button>
-              <button type="button" class="modal-btn-cerrar" @click="$emit('cerrar')">Cerrar</button>
+              <button type="button" class="modal-btn-cerrar" @click.stop.prevent="$emit('cerrar')">Cerrar</button>
             </div>
           </div>
         </div>
@@ -504,3 +504,4 @@ function formatFechaHora(fecha) {
 .modal-enter-active, .modal-leave-active { transition: opacity 0.2s ease; }
 .modal-enter-from, .modal-leave-to { opacity: 0; }
 </style>
+

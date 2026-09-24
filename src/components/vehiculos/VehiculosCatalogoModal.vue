@@ -3,9 +3,9 @@
     <Transition name="modal">
       <div
         v-if="visible"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        class="fixed inset-0 z-[80] flex items-center justify-center p-4"
         style="background:rgba(0,0,0,0.45);"
-        @click.self="$emit('cerrar')"
+        @click.self.stop="$emit('cerrar')"
       >
         <div
           class="rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
@@ -25,7 +25,7 @@
                 <p class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">{{ subtituloModal }}</p>
               </div>
             </div>
-            <button type="button" @click="$emit('cerrar')" class="w-8 h-8 rounded-lg flex items-center justify-center" :class="isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-400'">
+            <button type="button" @click.stop.prevent="$emit('cerrar')" class="w-8 h-8 rounded-lg flex items-center justify-center" :class="isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-400'">
               <i class="pi pi-times text-sm"></i>
             </button>
           </div>
@@ -83,7 +83,7 @@
             </div>
 
             <div class="flex gap-3 pt-1">
-              <button type="button" @click="$emit('cerrar')" class="flex-1 py-2.5 rounded-xl font-bold text-sm border-2" :class="isDark ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'">
+              <button type="button" @click.stop.prevent="$emit('cerrar')" class="flex-1 py-2.5 rounded-xl font-bold text-sm border-2" :class="isDark ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'">
                 Cancelar
               </button>
               <button type="submit" :disabled="loading" class="flex-1 py-2.5 rounded-xl text-white font-bold text-sm disabled:opacity-60" style="background:#c0392b;">
@@ -407,5 +407,6 @@ async function handleGuardar() {
 .modal-enter-active, .modal-leave-active { transition: opacity 0.2s ease; }
 .modal-enter-from, .modal-leave-to { opacity: 0; }
 </style>
+
 
 

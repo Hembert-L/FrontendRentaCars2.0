@@ -7,8 +7,8 @@ export const useContratosStore = defineStore('contratos', () => {
   const contratos = ref([])
   const loading   = ref(false)
   const error     = ref(null)
-  const advertencia = ref(null)
-  const incidenciasPendientes = ref([])
+  const advertenciaEstetica = ref(null)
+  const detallesEsteticos = ref([])
 
   async function fetchContratos(params = {}) {
     loading.value = true
@@ -35,13 +35,17 @@ export const useContratosStore = defineStore('contratos', () => {
   async function crear(form) {
     loading.value = true
     error.value   = null
-    advertencia.value = null
-    incidenciasPendientes.value = []
+    advertenciaEstetica.value = null
+    detallesEsteticos.value = []
     try {
       const endpoint = form.reserva_id ? '/admin/contratos' : '/admin/contratos/directo'
       const res = await api.post(endpoint, form)
-      advertencia.value = res.data?.advertencia || null
-      incidenciasPendientes.value = res.data?.incidencias_pendientes || []
+      advertenciaEstetica.value = res.data?.advertencia_estetica !== undefined
+        ? res.data.advertencia_estetica
+        : res.data?.advertencia || null
+      detallesEsteticos.value = (res.data?.detalles_esteticos !== undefined
+        ? res.data.detalles_esteticos
+        : res.data?.incidencias_pendientes) || []
       contratos.value.unshift(res.data.data)
       return res.data.data
     } catch (e) {
@@ -70,31 +74,63 @@ export const useContratosStore = defineStore('contratos', () => {
     return res.data.data
   }
 
-  async function syncCargos(contratoId, cargos) {
-    const registrados = []
-    for (const cargo of cargos) {
-      const res = await api.post('/admin/cargos-adicionales', {
-        contrato_id: contratoId,
-        tipo_cargo: cargo.tipo_cargo || 'OTRO',
-        descripcion: cargo.concepto || cargo.descripcion || null,
-        monto: Number(cargo.monto || 0),
-        fecha_registro: new Date().toISOString().slice(0, 19).replace('T', ' '),
-      })
-      registrados.push(res.data.data)
+  async function enviarSecuencia(endpoint, elementos, alConfirmar) {
+    const lote = elementos.map((elemento) => ({ ...elemento }))
+    const confirmados = []
+    for (let indice = 0; indice < lote.length; indice++) {
+      let res
+      try {
+        res = await api.post(endpoint, lote[indice])
+      } catch (errorOriginal) {
+        // Solo estos rechazos garantizan que no se registró el elemento.
+        const ambiguo = ![400, 401, 403, 404, 422].includes(errorOriginal.response?.status)
+        errorOriginal.progreso = {
+          confirmados: [...confirmados],
+          indiceFallido: indice,
+          noIntentados: lote.slice(indice + 1),
+          ambiguo,
+        }
+        throw errorOriginal
+      }
+      confirmados.push(res.data.data)
+      alConfirmar?.(res.data.data, indice)
     }
-    return registrados
+    return confirmados
+  }
+
+  async function syncCargos(contratoId, cargos, alConfirmar) {
+    return enviarSecuencia('/admin/cargos-adicionales', cargos.map((cargo) => ({
+      contrato_id: contratoId,
+      tipo_cargo: cargo.tipo_cargo || 'OTRO',
+      descripcion: cargo.concepto || cargo.descripcion || null,
+      monto: Number(cargo.monto || 0),
+      fecha_registro: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    })), alConfirmar)
+  }
+
+  async function syncIncidencias(contratoId, vehiculoId, incidencias, fecha, alConfirmar) {
+    return enviarSecuencia('/admin/incidencias', incidencias.map((incidencia) => ({
+      vehiculo_id: vehiculoId,
+      contrato_id: contratoId,
+      tipo_incidencia: incidencia.tipo_incidencia,
+      responsable_tipo: incidencia.responsable_tipo,
+      descripcion: incidencia.descripcion,
+      fecha,
+      costo: Number(incidencia.costo || 0),
+    })), alConfirmar)
   }
 
   return {
     contratos,
     loading,
     error,
-    advertencia,
-    incidenciasPendientes,
+    advertenciaEstetica,
+    detallesEsteticos,
     fetchContratos,
     fetchContrato,
     crear,
     cerrarRenta,
     syncCargos,
+    syncIncidencias,
   }
 })

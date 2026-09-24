@@ -70,12 +70,12 @@
         >
           <!-- Encabezado -->
           <div class="card-header">
-            <div class="flex items-start gap-3 min-w-0 flex-1">
+            <div class="card-identity flex items-start gap-3 min-w-0 flex-1">
               <div class="card-icon-wrap">
                 <i class="pi pi-car text-lg text-white"></i>
               </div>
               <div class="min-w-0">
-                <p class="font-extrabold text-base leading-tight text-white truncate">
+                <p class="card-title font-extrabold text-base leading-tight text-white truncate">
                   {{ nombreVehiculo(v) }}
                 </p>
                 <p v-if="v.categoria?.nombre" class="text-[11px] text-white/75 mt-0.5 font-medium">
@@ -92,6 +92,10 @@
             </span>
             <span v-else class="card-select-hint">Elegir</span>
           </div>
+
+          <p v-if="v.estado === 'RENTADO'" class="px-4 py-2 text-xs font-semibold text-white/90 bg-black/20">
+            Actualmente rentado · Compatible con las fechas seleccionadas
+          </p>
 
           <!-- Especificaciones -->
           <div class="card-specs">
@@ -544,6 +548,18 @@ function normalizarBusqueda(valor) {
   text-align: center;
 }
 @media (max-width: 640px) {
+  .card-header,
+  .card-identity,
+  .card-price-bar {
+    flex-direction: column;
+  }
+  .card-title {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .card-specs {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .vehicles-pagination {
     align-items: flex-start;
     flex-direction: column;

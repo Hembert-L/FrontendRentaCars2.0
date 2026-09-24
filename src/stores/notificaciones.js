@@ -18,6 +18,57 @@ function guardarLeidas(ids) {
   localStorage.setItem(LEIDAS_KEY, JSON.stringify(ids))
 }
 
+function normalizarTipo(tipo) {
+  return String(tipo || '').toLowerCase()
+}
+
+function tituloNotificacion(tipo) {
+  const map = {
+    licencia_por_vencer: 'Licencia por vencer',
+    seguro_por_vencer: 'Seguro por vencer',
+    pago_pendiente: 'Pago pendiente',
+    pago_parcial: 'Pago parcial',
+    incidencia_pendiente: 'Incidencia pendiente',
+    reserva_creada: 'Reserva reciente',
+  }
+  return map[tipo] || 'Notificación'
+}
+
+function prioridadOrden(prioridad) {
+  const map = { ALTA: 1, MEDIA: 2, BAJA: 3 }
+  return map[String(prioridad || '').toUpperCase()] || 9
+}
+
+function rutaNotificacion(notif) {
+  if (notif.contrato_id) return { name: 'pagos', query: { contrato_id: notif.contrato_id } }
+  if (notif.cliente_id) return { name: 'clientes' }
+  if (notif.vehiculo_id) return { name: 'vehiculos' }
+  if (notif.reserva_id) return { name: 'reservas' }
+  return null
+}
+
+function normalizarNotificacion(notif, index) {
+  const tipo = normalizarTipo(notif.tipo)
+  const entidad = notif.contrato_id || notif.cliente_id || notif.vehiculo_id || notif.seguro_id || notif.incidencia_id || notif.reserva_id || index
+  return {
+    ...notif,
+    id: notif.id || `${tipo}-${entidad}-${String(notif.mensaje || '').slice(0, 40)}`,
+    tipo,
+    titulo: notif.titulo || tituloNotificacion(tipo),
+    prioridad_orden: notif.prioridad_orden ?? prioridadOrden(notif.prioridad),
+    fecha: notif.fecha || notif.created_at || null,
+    ruta: notif.ruta || rutaNotificacion(notif),
+  }
+}
+
+function extraerNotificaciones(responseData) {
+  const payload = responseData?.data
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.notificaciones)) return payload.notificaciones
+  return []
+}
+
+
 export const useNotificacionesStore = defineStore('notificaciones', () => {
   const items = ref([])
   const loading = ref(false)
@@ -73,8 +124,8 @@ export const useNotificacionesStore = defineStore('notificaciones', () => {
     if (!silencioso) loading.value = true
     error.value = null
     try {
-      const res = await api.get('/notificaciones')
-      const lista = res.data.data ?? []
+      const res = await api.get('/admin/notificaciones')
+      const lista = extraerNotificaciones(res.data).map(normalizarNotificacion)
       const idsNuevos = lista
         .map((n) => n.id)
         .filter((id) => !conocidas.value.has(id))
@@ -127,4 +178,6 @@ export const useNotificacionesStore = defineStore('notificaciones', () => {
     iniciarPolling,
   }
 })
+
+
 
