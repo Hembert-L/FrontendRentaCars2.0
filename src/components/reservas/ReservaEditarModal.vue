@@ -5,7 +5,7 @@
         v-if="visible"
         class="fixed inset-0 z-[80] flex items-center justify-center p-4"
         style="background:rgba(0,0,0,0.45);"
-        @click.self.stop="$emit('cerrar')"
+        @click.self.stop="solicitarCierre"
       >
         <div
           class="rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
@@ -24,13 +24,14 @@
                 <i class="pi pi-calendar text-base" :class="isDark ? 'text-[#f0a500]' : ''" :style="!isDark ? 'color:#922b21;' : ''"></i>
               </div>
               <div>
-                <p class="font-extrabold" :class="isDark ? 'text-gray-100' : 'text-gray-900'">Editar reserva</p>
+                <p class="font-extrabold" :class="isDark ? 'text-gray-100' : 'text-gray-900'">Actualizar fechas</p>
                 <p class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">N° {{ reserva?.id }}</p>
               </div>
             </div>
             <button
               type="button"
-              @click.stop.prevent="$emit('cerrar')"
+              :disabled="guardando"
+              @click.stop.prevent="solicitarCierre"
               class="w-8 h-8 rounded-lg flex items-center justify-center transition-colors border"
               :class="isDark
                 ? 'border-red-900/60 text-[#f0a500] hover:bg-red-950/50'
@@ -43,13 +44,13 @@
           <div v-if="!puedeEditar" class="px-6 py-5">
             <p class="text-sm rounded-xl p-4 border" :class="isDark ? 'text-amber-300 bg-amber-950/30 border-amber-900/40' : 'text-amber-800 bg-amber-50 border-amber-200'">
               <i class="pi pi-info-circle mr-1"></i>
-              Las reservas <strong>canceladas</strong> no se pueden modificar.
+              Únicamente las reservas <strong>pendientes</strong> permiten actualizar sus fechas.
             </p>
             <button
               type="button"
               class="mt-4 w-full py-2.5 rounded-xl font-bold text-sm border transition-colors"
               :class="isDark ? 'border-gray-700 text-gray-300 hover:bg-gray-800' : 'border-gray-200 text-gray-600 hover:bg-gray-50'"
-              @click.stop.prevent="$emit('cerrar')"
+              @click.stop.prevent="solicitarCierre"
             >
               Cerrar
             </button>
@@ -90,7 +91,7 @@
             </div>
 
             <p class="text-xs rounded-lg p-3 border" :class="isDark ? 'text-gray-300 bg-gray-800/60 border-gray-700' : 'text-gray-600 bg-gray-50 border-gray-200'">
-              Solo se pueden ajustar las fechas. El estado cambia desde los flujos de contrato o cancelación.
+              Solo se modificará el periodo de esta reserva. El cliente y el vehículo permanecerán sin cambios.
             </p>
 
             <div class="flex gap-3 pt-2">
@@ -99,7 +100,7 @@
                 class="flex-1 py-2.5 rounded-xl font-bold text-sm border transition-colors"
                 :class="isDark ? 'border-gray-700 text-gray-300 hover:bg-gray-800' : 'border-gray-200 text-gray-600 hover:bg-gray-50'"
                 :disabled="guardando"
-                @click.stop.prevent="$emit('cerrar')"
+                @click.stop.prevent="solicitarCierre"
               >
                 Cancelar
               </button>
@@ -110,7 +111,7 @@
                 :disabled="guardando"
               >
                 <i v-if="guardando" class="pi pi-spin pi-spinner mr-1"></i>
-                Guardar cambios
+                {{ guardando ? 'Actualizando...' : 'Actualizar fechas' }}
               </button>
             </div>
           </form>
@@ -146,7 +147,7 @@ const errors = ref({})
 const hoy = computed(() => fechaHoyLocal())
 const manana = computed(() => sumarDiasISO(hoy.value, 1))
 
-const puedeEditar = computed(() => props.reserva?.estado !== 'CANCELADA')
+const puedeEditar = computed(() => props.reserva?.estado === 'PENDIENTE')
 
 watch(
   () => props.reserva,
@@ -170,14 +171,14 @@ function toInputDate(fecha) {
 
 function validar() {
   errors.value = {}
+  if (!puedeEditar.value) return false
   if (!form.value.fecha_inicio) errors.value.fecha_inicio = 'Requerido'
   if (!form.value.fecha_fin) errors.value.fecha_fin = 'Requerido'
   if (
-    props.reserva?.estado === 'PENDIENTE'
-    && form.value.fecha_inicio
+    form.value.fecha_inicio
     && form.value.fecha_inicio < manana.value
   ) {
-    errors.value.fecha_inicio = 'La reserva debe iniciar al menos ma?ana'
+    errors.value.fecha_inicio = 'La reserva debe iniciar al menos mañana'
   }
   if (form.value.fecha_inicio && form.value.fecha_fin && form.value.fecha_fin <= form.value.fecha_inicio) {
     errors.value.fecha_fin = 'Debe ser posterior al inicio'
@@ -186,11 +187,15 @@ function validar() {
 }
 
 function handleGuardar() {
-  if (!validar()) return
+  if (props.guardando || !puedeEditar.value || !validar()) return
   emit('guardar', {
     fecha_inicio: form.value.fecha_inicio,
     fecha_fin:    form.value.fecha_fin,
   })
+}
+
+function solicitarCierre() {
+  if (!props.guardando) emit('cerrar')
 }
 </script>
 
