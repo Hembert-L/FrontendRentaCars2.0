@@ -16,10 +16,11 @@
       <div class="flex-1">
         <label class="text-xs font-semibold mb-1 block" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Contrato con saldo pendiente</label>
         <select
-          v-model="contratoId"
+          :value="contratoId"
+          :disabled="operacionesBloqueadas || modalAbierto"
           class="w-full px-4 py-2.5 rounded-xl border text-sm focus:outline-none"
           :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-100' : 'border-gray-200 bg-gray-50'"
-          @change="cargarContrato"
+          @change="cargarContrato($event.target.value)"
         >
           <option value="">Seleccionar contrato...</option>
           <option v-for="c in contratosAbiertos" :key="c.id" :value="c.id">
@@ -42,20 +43,31 @@
         type="button"
         class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-white font-bold text-sm transition-all hover:opacity-90 disabled:opacity-40 shadow-sm shrink-0"
         style="background:#c0392b;"
-        :disabled="!contratoSel || saldoContrato <= 0"
-        @click="modalAbierto = true"
+        :disabled="operacionesBloqueadas || modalAbierto || !contratoSel || saldoContrato <= 0"
+        @click="abrirRegistro"
       >
         <i class="pi pi-plus text-sm"></i>
         Registrar pago
       </button>
     </div>
 
+    <div v-if="errorRecarga" role="alert" class="mb-4 rounded-xl border p-4 text-sm"
+      :class="isDark ? 'bg-amber-950/40 border-amber-800 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-900'">
+      <p>{{ errorRecarga }} Los datos pueden estar desactualizados. Actualiza antes de registrar o cancelar pagos.</p>
+      <button type="button" class="mt-2 font-bold underline disabled:opacity-50" :disabled="operacionEnCurso" @click="actualizarDatos">Actualizar datos</button>
+    </div>
+
+    <p v-if="advertenciaCierres" role="status" class="mb-4 rounded-xl border px-4 py-3 text-sm"
+      :class="isDark ? 'bg-amber-950/40 border-amber-800 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-900'">
+      {{ advertenciaCierres }}
+    </p>
+
     <!-- Tabla historial -->
     <div
       class="rounded-2xl border shadow-sm overflow-hidden"
       :class="isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'"
     >
-      <div v-if="pagosStore.loading" class="flex items-center justify-center py-20 gap-2" :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+      <div v-if="cargandoVista" class="flex items-center justify-center py-20 gap-2" :class="isDark ? 'text-gray-500' : 'text-gray-400'">
         <i class="pi pi-spin pi-spinner"></i>
         <span class="text-sm">Cargando pagos...</span>
       </div>
@@ -99,18 +111,26 @@
               </td>
               <td class="px-5 py-4 text-right">
                 <button
-                  v-if="p.estado_transaccion === 'CONFIRMADO'"
+                  v-if="puedeCancelarPago(p)"
                   type="button"
-                  class="w-8 h-8 rounded-lg inline-flex items-center justify-center border transition-all hover:shadow-sm"
+                  class="inline-flex items-center justify-center gap-1.5 min-h-8 px-3 rounded-lg border text-xs font-bold transition-all hover:shadow-sm whitespace-nowrap"
                   :class="isDark
                     ? 'border-red-800 bg-red-950/40 text-red-300 hover:bg-red-950/70 hover:border-red-700'
                     : 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100'"
                   title="Cancelar pago"
+                  :disabled="operacionesBloqueadas || modalAbierto"
                   @click="cancelarPago(p)"
                 >
                   <i class="pi pi-times text-xs"></i>
+                  Cancelar
                 </button>
-                <span v-else class="text-xs" :class="isDark ? 'text-gray-600' : 'text-gray-300'">—</span>
+                <span
+                  v-else
+                  class="inline-flex whitespace-nowrap text-xs font-semibold"
+                  :class="isDark ? 'text-gray-600' : 'text-gray-400'"
+                >
+                  No disponible
+                </span>
               </td>
             </tr>
             <tr v-if="!pagosStore.pagos.length">
@@ -158,20 +178,25 @@
       </div>
     </div>
 
-    <PagoRegistrarModal :visible="modalAbierto" :contrato="contratoSel" :guardando="guardando" @cerrar="modalAbierto = false" @guardar="registrarPago" />
+    <PagoRegistrarModal ref="modalPago" :visible="modalAbierto" :contrato="contratoSel"
+      :guardando="operacionEnCurso" :resumen="resumenLote" :error-recarga="errorRecarga"
+      @cerrar="cerrarRegistro" @guardar="registrarPago" @actualizar="actualizarDatos" />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useRoute, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import Swal from 'sweetalert2'
 import PagoRegistrarModal from '@/components/pagos/PagoRegistrarModal.vue'
 import { useContratosStore } from '@/stores/contratos'
 import { usePagosStore } from '@/stores/pagos'
 import { useAppTheme } from '@/composables/useAppTheme'
+import api from '@/services/api'
+import { getToken } from '@/services/authToken'
+import { fetchAllPaginated } from '@/utils/apiPagination'
 import { toastSuccess } from '@/utils/toast'
-import { formatPrecio, saldoPendienteContrato, montoExtrasContrato, totalFinalContrato } from '@/utils/contratoFormatters'
+import { formatPrecio, saldoPendienteContrato, montoExtrasContrato, totalFinalContrato, moneyCents, toMoneyNumber } from '@/utils/contratoFormatters'
 
 const route = useRoute()
 const { isDark } = useAppTheme()
@@ -182,8 +207,37 @@ const contratoId = ref('')
 const contratoSel = ref(null)
 const modalAbierto = ref(false)
 const guardando = ref(false)
+const cargandoInicial = ref(true)
+const modalPago = ref(null)
+const cancelando = ref(false)
+const recargando = ref(false)
+const seleccionando = ref(false)
+const errorRecarga = ref('')
+const cierresPorContrato = ref(new Map())
+const advertenciaCierres = ref('')
+const resumenLote = ref('')
+const confirmadosLote = ref(0)
+const pendientesLote = ref([])
+const loteCompletoPorCerrar = ref(null)
+const operacionEnCurso = computed(() => guardando.value || cancelando.value || recargando.value || seleccionando.value || pagosStore.procesando)
+const operacionesBloqueadas = computed(() => cargandoInicial.value || operacionEnCurso.value || Boolean(errorRecarga.value))
 const paginaActual = ref(1)
 const pagosPorPagina = 10
+
+const MOTIVOS_CANCELACION_PAGO = [
+  'Error al registrar el pago',
+  'Pago duplicado',
+  'Monto incorrecto',
+  'Método de pago incorrecto',
+  'Cliente solicitó anulación',
+  'Comprobante inválido',
+]
+
+const motivosCancelacionOptions = Object.fromEntries(
+  MOTIVOS_CANCELACION_PAGO.map((motivo) => [motivo, motivo]),
+)
+
+const cargandoVista = computed(() => cargandoInicial.value || pagosStore.loading)
 
 const contratosAbiertos = computed(() =>
   contratosStore.contratos.filter((c) =>
@@ -238,14 +292,47 @@ const puedeRetroceder = computed(() => pagination.value.current_page > 1)
 const puedeAvanzar = computed(() => pagination.value.current_page < pagination.value.last_page)
 
 onMounted(async () => {
-  await contratosStore.fetchContratos()
-  pagosStore.fetchPagos()
-  if (route.query.contrato_id) {
-    contratoId.value = String(route.query.contrato_id)
-    await cargarContrato()
-    modalAbierto.value = true
+  window.addEventListener('beforeunload', protegerRecarga)
+  cargandoInicial.value = true
+  try {
+    await Promise.all([
+      contratosStore.fetchContratos(),
+      pagosStore.fetchPagos(),
+      cargarCierres(),
+    ])
+    if (route.query.contrato_id) {
+      contratoId.value = String(route.query.contrato_id)
+      await cargarContrato()
+    }
+  } finally {
+    cargandoInicial.value = false
   }
+  if (route.query.contrato_id) abrirRegistro()
 })
+
+onBeforeUnmount(() => window.removeEventListener('beforeunload', protegerRecarga))
+onBeforeRouteLeave((to) => to.name === 'login' || !operacionEnCurso.value)
+onBeforeRouteUpdate((to) => to.name === 'login' || !operacionEnCurso.value)
+
+function protegerRecarga(event) {
+  if (!operacionEnCurso.value) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+function abrirRegistro() {
+  if (operacionesBloqueadas.value || modalAbierto.value || !contratoSel.value || saldoContrato.value <= 0) return
+  resumenLote.value = ''
+  confirmadosLote.value = 0
+  pendientesLote.value = []
+  loteCompletoPorCerrar.value = null
+  modalAbierto.value = true
+}
+
+function cerrarRegistro() {
+  if (operacionEnCurso.value) return
+  modalAbierto.value = false
+}
 
 watch(
   () => pagosStore.pagos.length,
@@ -261,16 +348,28 @@ function cambiarPagina(page) {
   paginaActual.value = page
 }
 
-async function cargarContrato() {
-  if (!contratoId.value) { contratoSel.value = null; return }
-  const contrato = await contratosStore.fetchContrato(contratoId.value)
-  contratoSel.value = await completarContratoConPagos(contrato)
+async function cargarContrato(id = contratoId.value) {
+  if (operacionEnCurso.value || errorRecarga.value || modalAbierto.value) return
+  if (!id) { contratoId.value = ''; contratoSel.value = null; return }
+  seleccionando.value = true
+  try {
+    const contrato = await contratosStore.fetchContrato(id)
+    contratoSel.value = await completarContratoConPagos(contrato)
+    contratoId.value = String(id)
+  } catch (e) {
+    await Swal.fire({ icon: 'error', title: 'Error', text: mensajeOriginal(e), confirmButtonColor: '#922b21' })
+  } finally {
+    seleccionando.value = false
+  }
 }
 
 async function completarContratoConPagos(contrato) {
   if (!contrato?.numero_contrato) return contrato
-  await pagosStore.fetchPagos({ search: contrato.numero_contrato, per_page: 100 })
-  const pagosContrato = pagosStore.pagos.filter((p) => Number(p.contrato_id || p.contrato?.id) === Number(contrato.id))
+  const { items } = await fetchAllPaginated(
+    (requestParams) => api.get('/admin/pagos', { params: requestParams }),
+    { search: contrato.numero_contrato, per_page: 100 },
+  )
+  const pagosContrato = items.filter((p) => Number(p.contrato_id || p.contrato?.id) === Number(contrato.id))
   return {
     ...contrato,
     pagos: pagosContrato,
@@ -281,60 +380,161 @@ async function completarContratoConPagos(contrato) {
 }
 
 async function registrarPago(form) {
+  if (operacionesBloqueadas.value) return
+  const pagos = (Array.isArray(form?.pagos) ? form.pagos : [form]).map((pago) => ({ ...pago }))
+  const saldo = moneyCents(saldoContrato.value)
+  const metodos = ['EFECTIVO', 'TRANSFERENCIA', 'DEPOSITO']
+  const valido = contratoSel.value?.id && saldo > 0 && pagos.length > 0
+    && pagos.every((p) => Number.isFinite(Number(p.monto)) && moneyCents(p.monto) > 0
+      && metodos.includes(p.metodo_pago) && typeof p.fecha_pago === 'string' && p.fecha_pago.trim())
+    && pagos.reduce((s, p) => s + moneyCents(p.monto), 0) <= saldo
+  if (!valido) {
+    resumenLote.value = 'Revisa el contrato, saldo, montos, métodos y fechas. El total no puede superar el saldo pendiente.'
+    return
+  }
+  const lote = pagos.map((pago) => ({ ...pago, monto: toMoneyNumber(pago.monto) }))
+  const contrato = { ...contratoSel.value }
   guardando.value = true
+  confirmadosLote.value = 0
+  loteCompletoPorCerrar.value = null
+  reconciliarPendientes(lote)
+  resumenLote.value = ''
+  let fallo = false
   try {
-    const pagos = Array.isArray(form.pagos) ? form.pagos : [form]
-    for (const pago of pagos) {
-      await pagosStore.registrar(contratoSel.value.id, pago)
+    try {
+      await pagosStore.registrarLote(contrato.id, lote, (_pago, indice) => {
+        confirmadosLote.value = indice + 1
+        reconciliarPendientes(lote.slice(indice + 1))
+        resumenLote.value = resumenProgreso()
+      })
+      loteCompletoPorCerrar.value = lote.length
+    } catch (e) {
+      if (e.response?.status === 401 || route.name === 'login') return
+      fallo = true
+      const indice = e.progreso?.indiceFallido ?? confirmadosLote.value
+      const ambiguo = e.progreso?.ambiguo ?? true
+      reconciliarPendientes(lote.slice(indice + (ambiguo ? 1 : 0)))
+      resumenLote.value = `${resumenProgreso()} Falló el elemento ${indice + 1}: ${mensajeOriginal(e)} `
+        + (ambiguo ? 'El resultado de ese pago es incierto y se retiró del reintento automático. Revisa el historial recargado antes de volver a ingresarlo manualmente.' : 'Reintentar enviará únicamente los pagos pendientes.')
     }
-    await cargarContrato()
-    await contratosStore.fetchContratos()
-    pagosStore.fetchPagos()
-    modalAbierto.value = false
-    toastSuccess(pagos.length > 1 ? 'Pagos registrados' : 'Pago registrado')
-  } catch (e) {
-    Swal.fire({ icon: 'error', title: 'Error', text: e.response?.data?.message || pagosStore.error, confirmButtonColor: '#922b21' })
+    const actualizado = await reconciliarDatos(contrato)
+    if (!fallo && actualizado) finalizarRegistro()
   } finally {
     guardando.value = false
   }
 }
 
-async function cancelarPago(pago) {
-  const result = await Swal.fire({
-    icon: 'warning',
-    title: '¿Cancelar pago?',
-    text: `El pago de $${formatPrecio(pago.monto)} quedará cancelado y el saldo del contrato se recalculará.`,
-    input: 'textarea',
-    inputLabel: 'Motivo de cancelación',
-    inputPlaceholder: 'Indica por qué se cancela este pago...',
-    inputAttributes: { maxlength: 500 },
-    showCancelButton: true,
-    confirmButtonText: 'Cancelar pago',
-    cancelButtonText: 'Volver',
-    confirmButtonColor: '#c0392b',
-    cancelButtonColor: '#6b7280',
-    background: isDark.value ? '#1f2937' : '#fff',
-    color: isDark.value ? '#f3f4f6' : '#111827',
-    preConfirm: (value) => {
-      const motivo = String(value || '').trim()
-      if (!motivo) {
-        Swal.showValidationMessage('Debes indicar el motivo de cancelación')
-        return false
-      }
-      return motivo
-    },
-  })
+function reconciliarPendientes(pagos) {
+  pendientesLote.value = pagos.map((pago) => ({ ...pago }))
+  modalPago.value?.actualizarPendientes(pendientesLote.value)
+}
 
-  if (!result.isConfirmed) return
+function resumenProgreso() {
+  return `Pagos confirmados: ${confirmadosLote.value}. Pagos pendientes: ${pendientesLote.value.length}.`
+}
 
+function mensajeOriginal(e) {
+  const datos = e.response?.data
+  return [datos?.message, ...Object.values(datos?.errors || {}).flat()].filter(Boolean).join(' ') || e.message || 'Error sin detalle.'
+}
+
+async function cargarCierres() {
+  // No conservar permisos de cancelación basados en una consulta anterior si la recarga falla.
+  cierresPorContrato.value = new Map()
+  advertenciaCierres.value = ''
   try {
-    await pagosStore.cancelar(pago.id, result.value)
-    await pagosStore.fetchPagos()
-    await contratosStore.fetchContratos()
-    if (contratoSel.value) await cargarContrato()
-    toastSuccess('Pago cancelado')
-  } catch (e) {
-    Swal.fire({ icon: 'error', title: 'Error', text: e.response?.data?.message || pagosStore.error, confirmButtonColor: '#922b21' })
+    const { items } = await fetchAllPaginated((params) => api.get('/admin/cierres-renta', { params }))
+    cierresPorContrato.value = new Map(items.map((cierre) => [Number(cierre.contrato_id), cierre]))
+  } catch {
+    advertenciaCierres.value = 'No se pudo comprobar qué contratos finalizados admiten cancelación de pagos. Su cancelación permanecerá deshabilitada; puedes seguir registrando pagos y cancelar pagos de contratos activos.'
+  }
+}
+
+async function reconciliarDatos(contrato = contratoSel.value) {
+  recargando.value = true
+  try {
+    // Las cuatro recargas principales bloquean si fallan; los cierres tienen una advertencia independiente.
+    const resultados = await Promise.allSettled([
+      contrato?.id ? contratosStore.fetchContrato(contrato.id) : Promise.resolve(null),
+      contrato?.id ? completarContratoConPagos(contrato) : Promise.resolve(null),
+      pagosStore.fetchPagos({}, { silencioso: true, lanzarError: true }),
+      fetchAllPaginated((params) => api.get('/admin/contratos', { params })),
+      cargarCierres(),
+    ])
+    const [detalle, historial, , contratos] = resultados
+    if (contrato?.id) {
+      const actualizado = detalle.status === 'fulfilled' ? detalle.value : contratoSel.value
+      contratoSel.value = historial.status === 'fulfilled'
+        ? { ...actualizado, pagos: historial.value.pagos, monto_pagado: historial.value.monto_pagado }
+        : actualizado
+    }
+    if (contratos.status === 'fulfilled') contratosStore.contratos = contratos.value.items
+    const nombres = ['contrato seleccionado', 'pagos del contrato', 'listado de pagos', 'listado de contratos']
+    errorRecarga.value = resultados.slice(0, 4).map((r, i) => r.status === 'rejected'
+      ? `No se pudo actualizar ${nombres[i]}: ${mensajeOriginal(r.reason)}` : '').filter(Boolean).join(' ')
+    return !errorRecarga.value
+  } finally {
+    recargando.value = false
+  }
+}
+
+function finalizarRegistro() {
+  const cantidad = loteCompletoPorCerrar.value
+  if (cantidad === null) return
+  modalAbierto.value = false
+  loteCompletoPorCerrar.value = null
+  toastSuccess(cantidad > 1 ? 'Pagos registrados' : 'Pago registrado')
+}
+
+async function actualizarDatos() {
+  if (operacionEnCurso.value) return
+  if (await reconciliarDatos()) finalizarRegistro()
+}
+
+async function cancelarPago(pago) {
+  if (operacionesBloqueadas.value || modalAbierto.value || !puedeCancelarPago(pago)) return
+  cancelando.value = true
+  try {
+    const result = await Swal.fire({
+      icon: 'warning',
+      title: '¿Cancelar pago?',
+      text: `El pago de $${formatPrecio(pago.monto)} quedará cancelado y el saldo del contrato se recalculará.`,
+      input: 'select',
+      inputLabel: 'Motivo de cancelación',
+      inputOptions: motivosCancelacionOptions,
+      inputPlaceholder: 'Selecciona un motivo...',
+      showCancelButton: true,
+      confirmButtonText: 'Cancelar pago',
+      cancelButtonText: 'Volver',
+      confirmButtonColor: '#c0392b',
+      cancelButtonColor: '#6b7280',
+      background: isDark.value ? '#1f2937' : '#fff',
+      color: isDark.value ? '#f3f4f6' : '#111827',
+      preConfirm: (value) => {
+        const motivo = String(value || '').trim()
+        if (!motivo) {
+          Swal.showValidationMessage('Debes seleccionar el motivo de cancelación')
+          return false
+        }
+        return motivo
+      },
+    })
+
+    if (!result.isConfirmed || route.name === 'login' || !getToken() || errorRecarga.value || !puedeCancelarPago(pago)) return
+
+    try {
+      await pagosStore.cancelar(pago.id, result.value)
+      if (route.name === 'login' || !getToken()) return
+      await reconciliarDatos()
+      toastSuccess('Pago cancelado')
+    } catch (e) {
+      if (e.response?.status === 401 || route.name === 'login' || !getToken()) return
+      const mensaje = mensajeOriginal(e)
+      await reconciliarDatos()
+      Swal.fire({ icon: 'error', title: 'Error', text: mensaje, confirmButtonColor: '#922b21' })
+    }
+  } finally {
+    cancelando.value = false
   }
 }
 function fmt(v) {
@@ -347,8 +547,21 @@ function nombreCliente(contrato) {
 }
 
 function nombreClientePago(pago) {
-  const contratoCompleto = contratosStore.contratos.find((c) => c.id === pago.contrato_id || c.id === pago.contrato?.id)
-  return nombreCliente(contratoCompleto)
+  return nombreCliente(contratoPago(pago))
+}
+
+function contratoPago(pago) {
+  const contratoId = pago.contrato_id || pago.contrato?.id
+  const contratoCompleto = contratosStore.contratos.find((c) => Number(c.id) === Number(contratoId))
+  return { ...pago.contrato, ...contratoCompleto }
+}
+
+function puedeCancelarPago(pago) {
+  if (pago.estado_transaccion !== 'CONFIRMADO') return false
+  const contrato = contratoPago(pago)
+  if (contrato?.estado_contrato !== 'FINALIZADO') return true
+  const cierre = cierresPorContrato.value.get(Number(pago.contrato_id || contrato.id))
+  return cierre?.estado === 'FINALIZADO_CON_DEUDA'
 }
 
 function metodoStyle(m) {

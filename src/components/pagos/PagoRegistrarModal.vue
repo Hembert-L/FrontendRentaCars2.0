@@ -1,10 +1,10 @@
 <template>
   <Teleport to="body">
     <Transition name="pay-slide">
-      <div v-if="visible" class="pay-overlay" @click.self.stop="$emit('cerrar')">
+      <div v-if="visible" class="pay-overlay" @click.self.stop="cerrar">
         <div class="pay-modal" :class="isDark ? 'pay-modal--dark' : ''" @click.stop>
           <header class="pay-header">
-            <button type="button" class="pay-close" @click.stop.prevent="$emit('cerrar')">
+            <button type="button" class="pay-close" :disabled="guardando" @click.stop.prevent="cerrar">
               <i class="pi pi-times"></i>
             </button>
             <p class="pay-kicker">Cobro de contrato</p>
@@ -44,12 +44,17 @@
           </section>
 
           <form class="pay-form" @submit.prevent="guardar">
+            <p v-if="resumen" class="pay-error" role="status" aria-live="polite">{{ resumen }}</p>
+            <div v-if="errorRecarga" class="pay-error" role="alert">
+              <p>{{ errorRecarga }} Los datos pueden estar desactualizados.</p>
+              <button type="button" :disabled="guardando" @click="actualizar">Actualizar datos</button>
+            </div>
             <label class="pay-field-label">Fecha del pago</label>
-            <input v-model="fechaPago" type="datetime-local" class="pay-input" readonly/>
+            <input v-model="fechaPago" :disabled="edicionBloqueada" type="datetime-local" class="pay-input" readonly/>
 
             <div class="pay-lines-head">
               <label class="pay-field-label">Pagos a registrar</label>
-              <button v-if="puedeAgregarLinea" type="button" class="pay-add-line" @click="agregarLinea">
+              <button v-if="puedeAgregarLinea" type="button" class="pay-add-line" :disabled="edicionBloqueada" @click="agregarLinea">
                 <i class="pi pi-plus"></i>
                 Otro método
               </button>
@@ -61,6 +66,7 @@
                   <span>$</span>
                   <input
                     v-model.number="linea.monto"
+                    :disabled="edicionBloqueada"
                     type="number"
                     min="0.01"
                     step="0.01"
@@ -68,13 +74,14 @@
                     @input="normalizarMonto(linea)"
                   />
                 </div>
-                <select v-model="linea.metodo_pago">
+                <select v-model="linea.metodo_pago" :disabled="edicionBloqueada">
                   <option v-for="m in metodos" :key="m.value" :value="m.value">{{ m.label }}</option>
                 </select>
                 <button
                   v-if="lineas.length > 1"
                   type="button"
                   class="pay-remove-line"
+                  :disabled="edicionBloqueada"
                   title="Quitar método"
                   @click="quitarLinea(index)"
                 >
@@ -84,7 +91,7 @@
             </div>
 
             <div class="pay-quick-actions">
-              <button type="button" @click="pagarSaldoCompleto">Pagar saldo completo</button>
+              <button type="button" :disabled="edicionBloqueada" @click="pagarSaldoCompleto">Pagar saldo completo</button>
               <span :class="montoValido ? 'ok' : 'warn'">
                 Registrando ${{ formatPrecio(totalFormulario) }} de ${{ formatPrecio(saldo) }}
               </span>
@@ -92,7 +99,7 @@
 
             <p v-if="errorLocal" class="pay-error">{{ errorLocal }}</p>
 
-            <button type="submit" class="pay-submit" :disabled="guardando || !montoValido">
+            <button type="submit" class="pay-submit" :disabled="edicionBloqueada || !montoValido">
               <i :class="guardando ? 'pi pi-spin pi-spinner' : 'pi pi-check-circle'"></i>
               {{ guardando ? 'Procesando...' : textoConfirmar }}
             </button>
@@ -120,15 +127,18 @@ const props = defineProps({
   visible: { type: Boolean, default: false },
   contrato: { type: Object, default: null },
   guardando: { type: Boolean, default: false },
+  resumen: { type: String, default: '' },
+  errorRecarga: { type: String, default: '' },
 })
 
-const emit = defineEmits(['cerrar', 'guardar'])
+const emit = defineEmits(['cerrar', 'guardar', 'actualizar'])
 
 const { isDark } = useAppTheme()
 const fechaPago = ref('')
 const errorLocal = ref('')
 const lineas = ref([])
 let lineId = 0
+const edicionBloqueada = computed(() => props.guardando || Boolean(props.errorRecarga))
 
 const metodos = [
   { value: 'EFECTIVO', label: 'Efectivo' },
@@ -148,10 +158,11 @@ const estadoPago = computed(() => props.contrato?.estado_pago || 'PENDIENTE')
 const totalFormulario = computed(() => toMoneyNumber(lineas.value.reduce((s, p) => s + Number(p.monto || 0), 0)))
 const saldoMax = computed(() => saldo.value.toFixed(2))
 const montoValido = computed(() =>
+  !!props.contrato?.id && !!fechaPago.value && lineas.value.length > 0 &&
   saldo.value > 0 &&
   totalFormulario.value > 0 &&
   totalFormulario.value <= saldo.value &&
-  lineas.value.every((p) => Number(p.monto) > 0 && p.metodo_pago),
+  lineas.value.every((p) => Number.isFinite(Number(p.monto)) && Number(p.monto) > 0 && metodos.some((m) => m.value === p.metodo_pago)),
 )
 const puedeAgregarLinea = computed(() => lineas.value.length < metodos.length && totalFormulario.value < saldo.value)
 const textoConfirmar = computed(() =>
@@ -164,11 +175,8 @@ watch(() => props.visible, (v) => {
   if (v) reiniciarFormulario()
 })
 
-watch(saldo, () => {
-  if (props.visible) reiniciarFormulario()
-})
-
 function reiniciarFormulario() {
+  if (edicionBloqueada.value) return
   errorLocal.value = ''
   fechaPago.value = fechaHoraLocalInput()
   lineId = 0
@@ -194,6 +202,7 @@ function fechaPagoApi() {
 }
 
 function normalizarMonto(linea) {
+  if (edicionBloqueada.value) return
   const monto = Number(linea.monto)
   if (!Number.isFinite(monto) || monto < 0) {
     linea.monto = 0
@@ -203,6 +212,7 @@ function normalizarMonto(linea) {
 }
 
 function agregarLinea() {
+  if (edicionBloqueada.value || !puedeAgregarLinea.value) return
   const usados = new Set(lineas.value.map((p) => p.metodo_pago))
   const metodo = metodos.find((m) => !usados.has(m.value))?.value || 'EFECTIVO'
   const restante = toMoneyNumber(Math.max(0, saldo.value - totalFormulario.value))
@@ -210,10 +220,12 @@ function agregarLinea() {
 }
 
 function quitarLinea(index) {
+  if (edicionBloqueada.value) return
   lineas.value.splice(index, 1)
 }
 
 function pagarSaldoCompleto() {
+  if (edicionBloqueada.value) return
   lineas.value = [nuevaLinea(saldo.value, lineas.value[0]?.metodo_pago || 'EFECTIVO')]
 }
 
@@ -227,6 +239,7 @@ function estadoPagoStyle(estado) {
 }
 
 function guardar() {
+  if (edicionBloqueada.value) return
   errorLocal.value = ''
   if (!fechaPago.value) {
     errorLocal.value = 'Selecciona la fecha del pago.'
@@ -249,9 +262,36 @@ function guardar() {
     })),
   })
 }
+
+function cerrar() {
+  if (!props.guardando) emit('cerrar')
+}
+
+function actualizar() {
+  if (!props.guardando) emit('actualizar')
+}
+
+// Solo el padre reconcilia el lote; los cambios del saldo nunca reinician estas líneas.
+function actualizarPendientes(pagos) {
+  lineas.value = pagos.map((pago) => ({ ...pago, id: pago.id ?? ++lineId }))
+}
+
+defineExpose({ actualizarPendientes })
 </script>
 
 <style scoped>
+.pay-modal button:disabled,
+.pay-modal input:disabled,
+.pay-modal select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pay-modal--dark .pay-error {
+  background: #450a0a;
+  border-color: #7f1d1d;
+  color: #fecaca;
+}
+.pay-error button { margin-top: 0.5rem; text-decoration: underline; }
 .pay-overlay {
   position: fixed;
   inset: 0;
