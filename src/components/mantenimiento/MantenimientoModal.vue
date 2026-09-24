@@ -5,7 +5,7 @@
         v-if="visible"
         class="fixed inset-0 z-[80] flex items-center justify-center p-4"
         style="background: rgba(0, 0, 0, 0.45)"
-        @click.self.stop="$emit('cerrar')"
+        @click.self.stop="cerrar"
       >
         <div
           class="rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
@@ -42,16 +42,19 @@
             <button
               type="button"
               class="w-8 h-8 rounded-lg border flex items-center justify-center"
-              @click.stop.prevent="$emit('cerrar')"
+              :disabled="bloqueado"
+              aria-label="Cerrar mantenimiento"
+              @click.stop.prevent="cerrar"
             >
               <i class="pi pi-times text-sm"></i>
             </button>
           </div>
 
           <form
-            class="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto"
+            class="px-6 py-5 max-h-[70vh] overflow-y-auto"
             @submit.prevent="handleGuardar"
           >
+            <fieldset :disabled="bloqueado" class="min-w-0 space-y-4">
             <div>
               <label class="field-label">Vehículo</label>
               <div v-if="modoEdicion" class="vehicle-selected readonly">
@@ -150,6 +153,38 @@
               </div>
             </div>
 
+            <div v-if="modoEdicion" class="incidencia-summary">
+              <p class="field-label">Incidencia vinculada</p>
+              <template v-if="mantenimiento?.incidencia_id || mantenimiento?.incidencia">
+                <p class="text-sm font-semibold">
+                  Incidencia #{{ mantenimiento.incidencia_id || mantenimiento.incidencia.id }}
+                  <template v-if="mantenimiento.incidencia"> · {{ mantenimiento.incidencia.tipo_incidencia }}</template>
+                </p>
+                <p class="text-sm">{{ mantenimiento.incidencia?.descripcion || 'Sin descripción' }}</p>
+                <p class="field-help">{{ mantenimiento.incidencia?.estado_incidencia || 'Estado no disponible' }} · Solo lectura</p>
+              </template>
+              <p v-else class="field-help">Sin incidencia vinculada</p>
+            </div>
+            <div v-else-if="puedeVincularIncidencia">
+              <label for="mantenimiento-incidencia" class="field-label">Incidencia relacionada (opcional)</label>
+              <select
+                id="mantenimiento-incidencia"
+                v-model="incidenciaId"
+                class="field-input w-full min-w-0"
+                :disabled="cargandoIncidencias"
+              >
+                <option value="">Sin incidencia relacionada</option>
+                <option v-for="incidencia in incidencias" :key="incidencia.id" :value="incidencia.id">
+                  {{ etiquetaIncidencia(incidencia) }}
+                </option>
+              </select>
+              <p v-if="cargandoIncidencias" class="field-help" role="status">Cargando incidencias...</p>
+              <p v-else-if="errorIncidencias" class="field-help" role="status">{{ errorIncidencias }}</p>
+              <p v-else-if="!incidencias.length" class="field-help">No hay incidencias elegibles. Puedes continuar sin vincular una.</p>
+              <p v-if="incidenciaSeleccionada" class="incidencia-summary text-sm mt-2">{{ etiquetaIncidencia(incidenciaSeleccionada) }}</p>
+              <p v-if="errors.incidencia_id" class="field-error">{{ errors.incidencia_id }}</p>
+            </div>
+
             <div>
               <p v-if="!modoEdicion" class="field-help">
                 La fecha se registrará automáticamente con la hora del sistema.
@@ -196,7 +231,7 @@
               <button
                 type="button"
                 class="flex-1 py-2.5 rounded-xl font-bold text-sm border"
-                @click.stop.prevent="$emit('cerrar')"
+                @click.stop.prevent="cerrar"
               >
                 Cancelar
               </button>
@@ -204,12 +239,13 @@
                 type="submit"
                 class="flex-1 py-2.5 rounded-xl font-bold text-sm text-white"
                 style="background: #c0392b"
-                :disabled="guardando"
+                :disabled="bloqueado"
               >
-                <i v-if="guardando" class="pi pi-spin pi-spinner mr-1"></i>
+                <i v-if="bloqueado" class="pi pi-spin pi-spinner mr-1"></i>
                 {{ modoEdicion ? "Guardar cambios" : "Registrar" }}
               </button>
             </div>
+            </fieldset>
           </form>
         </div>
       </div>
@@ -218,9 +254,11 @@
 </template>
 
 <script setup>
-import { ref, watch, computed } from "vue";
+import { ref, watch, computed, onBeforeUnmount } from "vue";
 import { useAppTheme } from "@/composables/useAppTheme";
 import { nombreVehiculo } from "@/utils/reservaFormatters";
+import api from "@/services/api";
+import { fetchAllPaginated } from "@/utils/apiPagination";
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -240,6 +278,18 @@ const errors = ref({});
 const busquedaVehiculo = ref("");
 const listaVehiculosAbierta = ref(false);
 const vehiculoSeleccionado = ref(null);
+const incidenciaId = ref("");
+const incidencias = ref([]);
+const cargandoIncidencias = ref(false);
+const errorIncidencias = ref("");
+const enviando = ref(false);
+const bloqueado = computed(() => props.guardando || enviando.value);
+const puedeVincularIncidencia = computed(() =>
+  props.visible && !props.modoEdicion && form.value.tipo_mantenimiento === "CORRECTIVO" && Boolean(form.value.vehiculo_id),
+);
+const incidenciaSeleccionada = computed(() => incidencias.value.find((i) => String(i.id) === String(incidenciaId.value)));
+let consultaIncidencias = null;
+let solicitudIncidencias = 0;
 let omitirSiguienteBusqueda = false;
 let buscarVehiculosTimer = null;
 
@@ -253,7 +303,7 @@ const vehiculosElegibles = computed(() => {
 
   return props.vehiculos.filter((v) => {
     if (idEdicion && v.id === idEdicion) return true;
-    return v.estado === "DISPONIBLE";
+    return ["DISPONIBLE", "EN PROCESO"].includes(v.estado);
   });
 });
 
@@ -284,7 +334,10 @@ const mostrarSinDisponibles = computed(
 watch(
   () => [props.visible, props.mantenimiento],
   () => {
+    clearTimeout(buscarVehiculosTimer);
+    enviando.value = false;
     if (!props.visible) return;
+    omitirSiguienteBusqueda = false;
     errors.value = {};
     busquedaVehiculo.value = "";
     listaVehiculosAbierta.value = false;
@@ -305,8 +358,64 @@ watch(
   },
 );
 
+watch(() => props.guardando, (guardando) => {
+  if (!guardando) enviando.value = false;
+});
+
+watch(
+  () => [props.visible, props.modoEdicion, form.value.tipo_mantenimiento, form.value.vehiculo_id],
+  cargarIncidencias,
+);
+
+async function cargarIncidencias() {
+  const solicitud = ++solicitudIncidencias;
+  consultaIncidencias?.abort();
+  consultaIncidencias = null;
+  incidenciaId.value = "";
+  incidencias.value = [];
+  errorIncidencias.value = "";
+  errors.value.incidencia_id = "";
+  cargandoIncidencias.value = false;
+  if (!puedeVincularIncidencia.value) return;
+
+  const vehiculoId = form.value.vehiculo_id;
+  const controller = new AbortController();
+  consultaIncidencias = controller;
+  cargandoIncidencias.value = true;
+  try {
+    const { items } = await fetchAllPaginated(
+      (params) => api.get("/admin/incidencias", { params, signal: controller.signal }),
+      { vehiculo_id: vehiculoId },
+    );
+    if (solicitud !== solicitudIncidencias || controller.signal.aborted) return;
+    incidencias.value = items.filter((i) =>
+      Number(i.vehiculo_id ?? i.vehiculo?.id) === Number(vehiculoId) &&
+      ["REPORTADA", "EN REVISION"].includes(i.estado_incidencia),
+    );
+  } catch {
+    if (solicitud !== solicitudIncidencias || controller.signal.aborted) return;
+    errorIncidencias.value = "No se pudieron cargar las incidencias. Puedes registrar el mantenimiento sin incidencia relacionada.";
+  } finally {
+    if (solicitud === solicitudIncidencias) {
+      cargandoIncidencias.value = false;
+      consultaIncidencias = null;
+    }
+  }
+}
+
+function etiquetaIncidencia(incidencia) {
+  const contrato = incidencia.contrato?.numero_contrato || incidencia.contrato_id || incidencia.contrato?.id;
+  return `#${incidencia.id} · ${incidencia.tipo_incidencia} · ${incidencia.descripcion || "Sin descripción"} · ${incidencia.estado_incidencia}${contrato ? ` · Contrato ${contrato}` : ""}`;
+}
+
+onBeforeUnmount(() => {
+  clearTimeout(buscarVehiculosTimer);
+  ++solicitudIncidencias;
+  consultaIncidencias?.abort();
+});
+
 watch(busquedaVehiculo, (value) => {
-  if (!props.visible || props.modoEdicion) return;
+  if (!props.visible || props.modoEdicion || bloqueado.value) return;
   if (omitirSiguienteBusqueda) {
     omitirSiguienteBusqueda = false;
     return;
@@ -322,7 +431,7 @@ watch(busquedaVehiculo, (value) => {
     listaVehiculosAbierta.value = true;
   }
   buscarVehiculosTimer = setTimeout(() => {
-    emit("buscar-vehiculos", value.trim());
+    if (props.visible && !bloqueado.value) emit("buscar-vehiculos", value.trim());
   }, 300);
 });
 
@@ -340,6 +449,10 @@ function formularioVacio() {
 function validar() {
   errors.value = {};
   if (!form.value.vehiculo_id) errors.value.vehiculo_id = "Selecciona un vehículo";
+  else if (!props.modoEdicion && (
+    String(vehiculoSeleccionado.value?.id) !== String(form.value.vehiculo_id) ||
+    !["DISPONIBLE", "EN PROCESO"].includes(vehiculoSeleccionado.value?.estado)
+  )) errors.value.vehiculo_id = "Selecciona un vehículo disponible o en proceso";
   if (form.value.costo === "" || Number(form.value.costo) < 0)
     errors.value.costo = "Ingresa un costo válido";
   if (!form.value.lugar?.trim()) errors.value.lugar = "Requerido";
@@ -347,12 +460,12 @@ function validar() {
 }
 
 function abrirListaVehiculos() {
-  if (props.modoEdicion) return;
+  if (props.modoEdicion || bloqueado.value) return;
   listaVehiculosAbierta.value = true;
 }
 
 function alternarListaVehiculos() {
-  if (props.modoEdicion) return;
+  if (props.modoEdicion || bloqueado.value) return;
   listaVehiculosAbierta.value = !listaVehiculosAbierta.value;
 }
 
@@ -361,6 +474,7 @@ function onBuscarVehiculo() {
 }
 
 function seleccionarVehiculo(vehiculo) {
+  if (bloqueado.value || props.modoEdicion || !["DISPONIBLE", "EN PROCESO"].includes(vehiculo?.estado)) return;
   form.value.vehiculo_id = vehiculo.id;
   vehiculoSeleccionado.value = vehiculo;
   omitirSiguienteBusqueda = true;
@@ -370,13 +484,18 @@ function seleccionarVehiculo(vehiculo) {
 }
 
 function limpiarVehiculoSeleccionado() {
+  if (bloqueado.value) return;
   form.value.vehiculo_id = "";
   vehiculoSeleccionado.value = null;
   listaVehiculosAbierta.value = false;
 }
 
+function cerrar() {
+  if (!bloqueado.value) emit("cerrar");
+}
+
 function handleGuardar() {
-  if (!validar()) return;
+  if (bloqueado.value || !validar()) return;
   const payload = {
     vehiculo_id: form.value.vehiculo_id,
     tipo_mantenimiento: form.value.tipo_mantenimiento,
@@ -386,12 +505,39 @@ function handleGuardar() {
   };
   if (props.modoEdicion) {
     payload.estado = form.value.estado;
+  } else if (puedeVincularIncidencia.value && incidenciaId.value) {
+    const incidencia = incidenciaSeleccionada.value;
+    if (!incidencia || Number(incidencia.vehiculo_id ?? incidencia.vehiculo?.id) !== Number(form.value.vehiculo_id)) {
+      errors.value.incidencia_id = "Selecciona una incidencia válida del vehículo actual o continúa sin vinculación.";
+      return;
+    }
+    payload.incidencia_id = incidencia.id;
   }
+  enviando.value = true;
+  clearTimeout(buscarVehiculosTimer);
   emit("guardar", payload);
 }
 </script>
 
 <style scoped>
+.incidencia-summary {
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  background: #f8fafc;
+  color: #334155;
+  overflow-wrap: anywhere;
+}
+.modal-panel-dark .incidencia-summary {
+  background: #1f2937;
+  color: #e5e7eb;
+}
+.modal-panel-dark .field-help {
+  color: #9ca3af;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .field-label {
   display: block;
   font-size: 0.7rem;
