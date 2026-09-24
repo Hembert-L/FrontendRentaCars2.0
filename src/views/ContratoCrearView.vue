@@ -195,14 +195,18 @@ function escaparHtml(value) {
     .replace(/'/g, '&#039;')
 }
 
-function htmlAdvertenciaIncidencias(advertencia, incidencias = []) {
-  if (!advertencia) return ''
-  const lista = incidencias.slice(0, 3)
-    .map((i) => `<li><strong>${escaparHtml(i.tipo_incidencia || 'Incidencia')}:</strong> ${escaparHtml(i.descripcion || 'Sin descripción')}</li>`)
+function labelTipoDetalleEstetico(tipo) {
+  return tipo === 'DANIO ESTETICO' ? 'Daño estético' : tipo || 'Detalle estético'
+}
+
+function htmlAdvertenciaEstetica(advertenciaEstetica, detallesEsteticos = []) {
+  if (!advertenciaEstetica) return ''
+  const lista = detallesEsteticos.slice(0, 3)
+    .map((detalle) => `<li><strong>${escaparHtml(labelTipoDetalleEstetico(detalle.tipo_incidencia))}:</strong> ${escaparHtml(detalle.descripcion || 'Sin descripción')}</li>`)
     .join('')
-  const extra = incidencias.length > 3 ? `<p style="margin-top:.5rem;">Y ${incidencias.length - 3} más.</p>` : ''
+  const extra = detallesEsteticos.length > 3 ? `<p style="margin-top:.5rem;">Y ${detallesEsteticos.length - 3} más.</p>` : ''
   return `
-    <p style="margin-bottom:.75rem;">${escaparHtml(advertencia)}</p>
+    <p style="margin-bottom:.75rem;">${escaparHtml(advertenciaEstetica)}</p>
     ${lista ? `<ul style="text-align:left; padding-left:1.25rem; margin:0;">${lista}</ul>${extra}` : ''}
   `
 }
@@ -483,8 +487,7 @@ async function generarContrato() {
     }
     const contrato = await contratosStore.crear(payload)
     contratoGenerado.value = contrato
-    const advertenciaContrato = contratosStore.advertencia
-    const htmlAdvertencia = htmlAdvertenciaIncidencias(advertenciaContrato, contratosStore.incidenciasPendientes)
+    const htmlAdvertencia = htmlAdvertenciaEstetica(contratosStore.advertenciaEstetica, contratosStore.detallesEsteticos)
     if (htmlAdvertencia) {
       await Swal.fire({
         icon: 'warning',

@@ -1,7 +1,7 @@
 <template>
   <div class="cierre-root" :class="isDark ? 'cierre-root--dark' : 'cierre-root--light'">
     <header class="cierre-header">
-      <button type="button" class="cierre-back" @click="volverAContratos">
+      <button type="button" class="cierre-back" :disabled="operacionEnCurso" @click="volverAContratos">
         <i class="pi pi-arrow-left"></i>
       </button>
       <div class="flex-1 min-w-0">
@@ -18,6 +18,13 @@
 
     <div v-else-if="contrato" class="cierre-layout">
       <div class="cierre-main">
+        <div v-if="resultadoGuardado || errorRecarga" class="cierre-alert" role="status" aria-live="polite">
+          <p v-if="resultadoGuardado">{{ resultadoGuardado }}</p>
+          <p v-if="errorRecarga">{{ errorRecarga }} Los datos pueden estar desactualizados. Actualiza antes de guardar o cerrar.</p>
+          <button v-if="errorRecarga" type="button" class="cierre-alert-btn" :disabled="operacionEnCurso" @click="reintentarRecarga">
+            Actualizar datos
+          </button>
+        </div>
         <div class="cierre-info-banner">
           <div v-for="info in infoContrato" :key="info.label" class="cierre-info-item">
             <i :class="['pi', info.icon]"></i>
@@ -43,6 +50,7 @@
             <label>Estado y observaciones al recibir</label>
             <textarea
               v-model="observacionesRecepcion"
+              :disabled="operacionEnCurso"
               rows="3"
               class="cierre-input"
               placeholder="Describe rayones, golpes, limpieza u otros detalles..."
@@ -74,6 +82,7 @@
                     :key="nivel.value"
                     type="button"
                     class="cierre-fuel-point"
+                    :disabled="operacionEnCurso"
                     :class="{ 'cierre-fuel-point--active': nivel.value === nivelRecepcion }"
                     :style="{ left: `${nivel.pct}%` }"
                     :aria-label="`Seleccionar ${nivel.label}`"
@@ -87,6 +96,7 @@
                     v-for="nivel in NIVELES_COMBUSTIBLE"
                     :key="`fuel-label-${nivel.value}`"
                     type="button"
+                    :disabled="operacionEnCurso"
                     :class="{ 'cierre-fuel-label--active': nivel.value === nivelRecepcion }"
                     @click="seleccionarCombustible(nivel.value)"
                   >
@@ -98,7 +108,7 @@
             <div v-if="alertaCombustible" class="cierre-alert">
               <i class="pi pi-exclamation-triangle"></i>
               <span>Combustible menor al entregado</span>
-              <button type="button" class="cierre-alert-btn" @click="agregarCargoCombustible">
+              <button type="button" class="cierre-alert-btn" :disabled="operacionEnCurso" @click="agregarCargoCombustible">
                 + Cargo $10
               </button>
             </div>
@@ -114,12 +124,13 @@
               <div class="flex-1">
                 <p class="cierre-status-title">{{ horasRetraso }} hora(s) de retraso</p>
                 <label class="cierre-check">
-                  <input v-model="aplicarCargoRetraso" type="checkbox" />
+                  <input v-model="aplicarCargoRetraso" :disabled="operacionEnCurso" type="checkbox" />
                   <span>Aplicar cargo por retraso al cierre</span>
                 </label>
                 <input
                   v-if="aplicarCargoRetraso"
                   v-model.number="montoRetraso"
+                  :disabled="operacionEnCurso"
                   type="number"
                   min="0.01"
                   step="0.01"
@@ -142,6 +153,7 @@
               type="button"
               class="cierre-add-btn"
               @click="agregarCargoNuevo()"
+              :disabled="operacionEnCurso"
             >
               <i class="pi pi-plus"></i> Agregar
             </button>
@@ -165,6 +177,7 @@
           <div v-for="(cargo, i) in cargos" :key="i" class="cierre-cargo-row">
             <select
               v-model="cargo.tipo_cargo"
+              :disabled="operacionEnCurso"
               class="cierre-input cierre-input--sm cierre-input--type"
             >
               <option value="" disabled>Selecciona tipo</option>
@@ -175,17 +188,19 @@
             </select>
             <input
               v-model="cargo.concepto"
+              :disabled="operacionEnCurso"
               class="cierre-input cierre-input--sm"
               placeholder="Concepto del cargo"
             />
             <input
               v-model.number="cargo.monto"
+              :disabled="operacionEnCurso"
               type="number"
               min="0"
               class="cierre-input cierre-input--sm cierre-input--amount"
               placeholder="0.00"
             />
-            <button type="button" class="cierre-remove-btn" @click="cargos.splice(i, 1)">
+            <button type="button" class="cierre-remove-btn" :disabled="operacionEnCurso" @click="eliminarCargo(i)">
               <i class="pi pi-times"></i>
             </button>
           </div>
@@ -196,7 +211,7 @@
             <button
               type="button"
               class="cierre-save-btn"
-              :disabled="guardandoCargos"
+              :disabled="operacionEnCurso || Boolean(errorRecarga)"
               @click="guardarCargosPendientes"
             >
               <i :class="guardandoCargos ? 'pi pi-spin pi-spinner' : 'pi pi-save'"></i>
@@ -213,12 +228,13 @@
               type="button"
               class="cierre-add-btn"
               @click="agregarIncidenciaNueva()"
+              :disabled="operacionEnCurso"
             >
               <i class="pi pi-plus"></i> Agregar
             </button>
           </div>
           <p class="cierre-helper">
-            Registra daños, accidentes o fallas encontradas al recibir el vehículo. Si el responsable es el cliente y hay costo, se suma al contrato.
+            Registra daños estéticos o mecánicos encontrados al recibir el vehículo. Si el responsable es el cliente y hay costo, se suma al contrato.
           </p>
           <div v-if="incidenciasRegistradas.length" class="cierre-registered-cargos cierre-registered-incidencias">
             <div class="cierre-registered-head">
@@ -235,16 +251,16 @@
           <div v-for="(incidencia, i) in incidencias" :key="i" class="cierre-incidencia-row">
             <select
               v-model="incidencia.tipo_incidencia"
+              :disabled="operacionEnCurso"
               class="cierre-input cierre-input--sm cierre-input--type"
             >
               <option value="" disabled>Tipo</option>
-              <option value="DANIO">Daño</option>
-              <option value="ACCIDENTE">Accidente</option>
-              <option value="FALLA MECANICA">Falla mecánica</option>
-              <option value="OTRO">Otro</option>
+              <option value="DANIO ESTETICO">Daño estético</option>
+              <option value="DANIO MECANICO">Daño mecánico</option>
             </select>
             <select
               v-model="incidencia.responsable_tipo"
+              :disabled="operacionEnCurso"
               class="cierre-input cierre-input--sm cierre-input--responsable"
             >
               <option value="CLIENTE">Cliente</option>
@@ -254,18 +270,20 @@
             </select>
             <input
               v-model="incidencia.descripcion"
+              :disabled="operacionEnCurso"
               class="cierre-input cierre-input--sm"
               placeholder="Descripción de la incidencia"
             />
             <input
               v-model.number="incidencia.costo"
+              :disabled="operacionEnCurso"
               type="number"
               min="0"
               step="0.01"
               class="cierre-input cierre-input--sm cierre-input--amount"
               placeholder="0.00"
             />
-            <button type="button" class="cierre-remove-btn" @click="incidencias.splice(i, 1)">
+            <button type="button" class="cierre-remove-btn" :disabled="operacionEnCurso" @click="eliminarIncidencia(i)">
               <i class="pi pi-times"></i>
             </button>
           </div>
@@ -276,7 +294,7 @@
             <button
               type="button"
               class="cierre-save-btn"
-              :disabled="guardandoIncidencias"
+              :disabled="operacionEnCurso || Boolean(errorRecarga)"
               @click="guardarIncidenciasPendientes"
             >
               <i :class="guardandoIncidencias ? 'pi pi-spin pi-spinner' : 'pi pi-save'"></i>
@@ -331,7 +349,7 @@
           <button
             type="button"
             class="cierre-btn cierre-btn--outline"
-            :disabled="cobrando || saldoPendiente <= 0"
+            :disabled="operacionEnCurso || Boolean(errorRecarga) || saldoPendiente <= 0"
             @click="irACobrarSaldo"
           >
             <i :class="cobrando ? 'pi pi-spin pi-spinner' : 'pi pi-dollar'"></i>
@@ -340,7 +358,7 @@
           <button
             type="button"
             class="cierre-btn cierre-btn--primary"
-            :disabled="cerrando || Boolean(mensajeBloqueoCierre)"
+            :disabled="operacionEnCurso || Boolean(mensajeBloqueoCierre)"
             @click="cerrarRenta"
           >
             <i :class="cerrando ? 'pi pi-spin pi-spinner' : 'pi pi-flag'"></i>
@@ -355,12 +373,13 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from "vue";
-import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import { useContratosStore } from "@/stores/contratos";
 import api from "@/services/api";
 import { useAppTheme } from "@/composables/useAppTheme";
 import { toastSuccess } from "@/utils/toast";
+import { fetchAllPaginated } from "@/utils/apiPagination";
 import {
   NIVELES_COMBUSTIBLE,
   normalizarNivelCombustible,
@@ -382,6 +401,12 @@ const cerrando = ref(false);
 const cobrando = ref(false);
 const guardandoCargos = ref(false);
 const guardandoIncidencias = ref(false);
+const recargando = ref(false);
+const errorRecarga = ref("");
+const resultadoGuardado = ref("");
+const operacionEnCurso = computed(() =>
+  guardandoCargos.value || guardandoIncidencias.value || recargando.value || cerrando.value || cobrando.value,
+);
 const salidaConfirmada = ref(false);
 const observacionesRecepcion = ref("");
 const nivelRecepcion = ref("1/2");
@@ -439,6 +464,8 @@ const labelPagoContrato = computed(() =>
   contrato.value?.estado_pago === "PAGADO" ? "Pagado" : "Pendiente",
 );
 const mensajeBloqueoCierre = computed(() => {
+  if (operacionEnCurso.value) return "Espera a que termine la operación en curso.";
+  if (errorRecarga.value) return "Actualiza los datos del contrato antes de cerrar la renta.";
   if (!contrato.value) return "No se encontro el contrato.";
   if (contrato.value.estado_contrato !== "ACTIVO")
     return "Solo se puede cerrar un contrato activo.";
@@ -505,10 +532,14 @@ onBeforeUnmount(() => {
   window.removeEventListener("beforeunload", advertirSalidaNavegador);
 });
 
-onBeforeRouteLeave(async () => {
+onBeforeRouteLeave(async (to) => {
+  if (to.name === "login") return true;
+  if (operacionEnCurso.value) return false;
   if (salidaConfirmada.value) return true;
   return confirmarSalidaConCargos();
 });
+
+onBeforeRouteUpdate((to) => to.name === "login" || (!operacionEnCurso.value && confirmarSalidaConCargos()));
 
 function cargosDesdeContrato(lista) {
   return (lista || [])
@@ -525,12 +556,11 @@ function cargosDesdeContrato(lista) {
 
 async function cargarCargosContrato() {
   if (!contrato.value?.id) return;
-  const res = await api.get("/admin/cargos-adicionales", {
-    params: { contrato_id: contrato.value.id, per_page: 100 },
-  });
-  const payload = res.data?.data;
-  const lista = Array.isArray(payload) ? payload : (Array.isArray(payload?.data) ? payload.data : []);
-  cargosRegistrados.value = cargosDesdeContrato(lista);
+  const { items } = await fetchAllPaginated(
+    (params) => api.get("/admin/cargos-adicionales", { params }),
+    { contrato_id: contrato.value.id, per_page: 100 },
+  );
+  cargosRegistrados.value = cargosDesdeContrato(items);
 }
 
 function incidenciasDesdeLista(lista) {
@@ -551,12 +581,11 @@ function incidenciasDesdeLista(lista) {
 
 async function cargarIncidenciasContrato() {
   if (!contrato.value?.vehiculo?.id) return;
-  const res = await api.get("/admin/incidencias", {
-    params: { vehiculo_id: contrato.value.vehiculo.id },
-  });
-  const payload = res.data?.data;
-  const lista = Array.isArray(payload) ? payload : (Array.isArray(payload?.data) ? payload.data : []);
-  incidenciasRegistradas.value = incidenciasDesdeLista(lista);
+  const { items } = await fetchAllPaginated(
+    (params) => api.get("/admin/incidencias", { params }),
+    { vehiculo_id: contrato.value.vehiculo.id },
+  );
+  incidenciasRegistradas.value = incidenciasDesdeLista(items);
 }
 
 function cargosValidos() {
@@ -568,11 +597,13 @@ function cargosIncompletos() {
 }
 
 function agregarCargoNuevo(tipo = "", concepto = "", monto = 0) {
+  if (operacionEnCurso.value) return;
   const tipoCargo = typeof tipo === "string" ? tipo : "";
   cargos.value.unshift({ concepto, monto, tipo_cargo: tipoCargo });
 }
 
 async function confirmarSalidaConCargos() {
+  if (operacionEnCurso.value) return false;
   if (!tieneCargosSinGuardar.value && !tieneIncidenciasSinGuardar.value) return true;
   const result = await Swal.fire({
     icon: "warning",
@@ -584,56 +615,120 @@ async function confirmarSalidaConCargos() {
     confirmButtonColor: "#922b21",
     cancelButtonColor: "#6b7280",
   });
-  return result.isConfirmed;
+  return result.isConfirmed && !operacionEnCurso.value;
 }
 
 function advertirSalidaNavegador(event) {
-  if (!tieneCargosSinGuardar.value && !tieneIncidenciasSinGuardar.value) return;
+  if (!operacionEnCurso.value && !tieneCargosSinGuardar.value && !tieneIncidenciasSinGuardar.value) return;
   event.preventDefault();
   event.returnValue = "";
 }
 
 async function volverAContratos() {
+  if (operacionEnCurso.value) return;
   if (await confirmarSalidaConCargos()) {
     salidaConfirmada.value = true;
     router.push({ name: "contratos" });
   }
 }
 
-async function registrarCargosPendientes({ mostrarExito = false } = {}) {
-  if (!cargos.value.length) return false;
-  if (cargosIncompletos()) {
+function eliminarCargo(indice) {
+  if (!operacionEnCurso.value) cargos.value.splice(indice, 1);
+}
+
+function eliminarIncidencia(indice) {
+  if (!operacionEnCurso.value) incidencias.value.splice(indice, 1);
+}
+
+function mensajeErrorOriginal(error) {
+  const datos = error.response?.data;
+  const detalles = Object.values(datos?.errors || {}).flat().join(" ");
+  return [datos?.message, detalles].filter(Boolean).join(" ") || error.message || "Error sin detalle.";
+}
+
+async function recargarDatosContrato() {
+  recargando.value = true;
+  try {
+    // Intentar las tres lecturas aunque alguna falle; nunca recuperar pendientes desde estas listas.
+    const resultados = await Promise.allSettled([
+      store.fetchContrato(contrato.value.id).then((actualizado) => { contrato.value = actualizado; }),
+      cargarCargosContrato(),
+      cargarIncidenciasContrato(),
+    ]);
+    const nombres = ["contrato", "cargos", "incidencias"];
+    errorRecarga.value = resultados
+      .map((resultado, indice) => resultado.status === "rejected"
+        ? `No se pudo actualizar ${nombres[indice]}: ${mensajeErrorOriginal(resultado.reason)}` : "")
+      .filter(Boolean).join(" ");
+    return !errorRecarga.value;
+  } finally {
+    recargando.value = false;
+  }
+}
+
+async function reintentarRecarga() {
+  if (operacionEnCurso.value || !contrato.value) return;
+  await recargarDatosContrato();
+}
+
+async function registrarColeccion(tipo, { mostrarExito = false, desdeCobro = false } = {}) {
+  if (guardandoCargos.value || guardandoIncidencias.value || cerrando.value || recargando.value
+    || (cobrando.value && !desdeCobro) || errorRecarga.value || !contrato.value) return false;
+  const esCargo = tipo === "cargos";
+  const pendientes = esCargo ? cargos : incidencias;
+  const guardando = esCargo ? guardandoCargos : guardandoIncidencias;
+  if (!pendientes.value.length) return false;
+  if (esCargo ? cargosIncompletos() : incidenciasIncompletas()) {
     await Swal.fire({
       icon: "warning",
-      title: "Completa los cargos",
-      text: "Cada cargo debe tener tipo, concepto y un monto mayor a cero antes de guardarlo.",
+      title: esCargo ? "Completa los cargos" : "Completa las incidencias",
+      text: esCargo
+        ? "Cada cargo debe tener tipo, concepto y un monto mayor a cero antes de guardarlo."
+        : "Cada incidencia debe tener tipo, responsable, descripción y un costo válido.",
       confirmButtonColor: "#922b21",
     });
     return false;
   }
 
-  guardandoCargos.value = true;
+  const lote = pendientes.value.map((elemento) => ({ ...elemento }));
+  let confirmados = 0;
+  let fallo = null;
+  const resumen = () => `${esCargo ? "Cargos confirmados" : "Incidencias confirmadas"}: ${confirmados}. Pendientes: ${pendientes.value.length}.`;
+  guardando.value = true;
+  resultadoGuardado.value = "";
   try {
-    const registrados = await store.syncCargos(contrato.value.id, cargosValidos());
-    cargosRegistrados.value = [...cargosDesdeContrato(registrados), ...cargosRegistrados.value];
-    cargos.value = [];
-    contrato.value = await store.fetchContrato(contrato.value.id);
-    await cargarCargosContrato();
-    if (mostrarExito) {
-      toastSuccess("Cargos guardados", "Los cargos adicionales quedaron registrados en el contrato.");
+    const alConfirmar = (registro, indice) => {
+      confirmados = indice + 1;
+      pendientes.value = lote.slice(confirmados).map((elemento) => ({ ...elemento }));
+      if (!registro) return;
+      if (esCargo) cargosRegistrados.value = [...cargosDesdeContrato([registro]), ...cargosRegistrados.value];
+      else incidenciasRegistradas.value = [...incidenciasDesdeLista([registro]), ...incidenciasRegistradas.value];
+    };
+    try {
+      if (esCargo) await store.syncCargos(contrato.value.id, lote, alConfirmar);
+      else await store.syncIncidencias(contrato.value.id, contrato.value.vehiculo?.id, lote, fechaHoraActualApi(), alConfirmar);
+    } catch (e) {
+      fallo = e;
+      const indice = e.progreso?.indiceFallido ?? confirmados;
+      const ambiguo = e.progreso?.ambiguo ?? true;
+      pendientes.value = lote.slice(indice + (ambiguo ? 1 : 0)).map((elemento) => ({ ...elemento }));
+      resultadoGuardado.value = `${resumen()} `
+        + `Falló el elemento ${indice + 1}: ${mensajeErrorOriginal(e)} `
+        + (ambiguo ? "Su resultado es incierto y se retiró del reintento automático. Revisa los registros recargados antes de volver a agregar ese elemento." : "Reintentar enviará solamente los pendientes.");
     }
-    return true;
-  } catch (e) {
-    await Swal.fire({
-      icon: "error",
-      title: "No se pudieron guardar",
-      text: e.response?.data?.message || "No se pudieron registrar los cargos.",
-      confirmButtonColor: "#922b21",
-    });
-    return false;
+    const actualizado = await recargarDatosContrato();
+    if (!fallo) {
+      resultadoGuardado.value = resumen();
+      if (mostrarExito && actualizado) toastSuccess(esCargo ? "Cargos guardados" : "Incidencias guardadas", resultadoGuardado.value);
+    }
+    return !fallo && actualizado;
   } finally {
-    guardandoCargos.value = false;
+    guardando.value = false;
   }
+}
+
+async function registrarCargosPendientes(opciones = {}) {
+  return registrarColeccion("cargos", opciones);
 }
 
 async function guardarCargosPendientes() {
@@ -646,8 +741,9 @@ function incidenciasIncompletas() {
   );
 }
 
-function agregarIncidenciaNueva(tipo = "", descripcion = "", costo = 0) {
-  const tipoIncidencia = typeof tipo === "string" ? tipo : "";
+function agregarIncidenciaNueva(tipo = "DANIO ESTETICO", descripcion = "", costo = 0) {
+  if (operacionEnCurso.value) return;
+  const tipoIncidencia = ["DANIO ESTETICO", "DANIO MECANICO"].includes(tipo) ? tipo : "DANIO ESTETICO";
   incidencias.value.unshift({
     tipo_incidencia: tipoIncidencia,
     responsable_tipo: "CLIENTE",
@@ -656,52 +752,8 @@ function agregarIncidenciaNueva(tipo = "", descripcion = "", costo = 0) {
   });
 }
 
-async function registrarIncidenciasPendientes({ mostrarExito = false } = {}) {
-  if (!incidencias.value.length) return false;
-  if (incidenciasIncompletas()) {
-    await Swal.fire({
-      icon: "warning",
-      title: "Completa las incidencias",
-      text: "Cada incidencia debe tener tipo, responsable, descripción y un costo válido.",
-      confirmButtonColor: "#922b21",
-    });
-    return false;
-  }
-
-  guardandoIncidencias.value = true;
-  try {
-    const registradas = [];
-    for (const incidencia of incidencias.value) {
-      const res = await api.post("/admin/incidencias", {
-        vehiculo_id: contrato.value.vehiculo?.id,
-        contrato_id: contrato.value.id,
-        tipo_incidencia: incidencia.tipo_incidencia,
-        responsable_tipo: incidencia.responsable_tipo,
-        descripcion: incidencia.descripcion,
-        fecha: fechaHoraActualApi(),
-        costo: Number(incidencia.costo || 0),
-      });
-      registradas.push(res.data.data);
-    }
-    incidenciasRegistradas.value = [...incidenciasDesdeLista(registradas), ...incidenciasRegistradas.value];
-    incidencias.value = [];
-    contrato.value = await store.fetchContrato(contrato.value.id);
-    await cargarIncidenciasContrato();
-    if (mostrarExito) {
-      toastSuccess("Incidencias guardadas", "Las incidencias quedaron registradas en el contrato.");
-    }
-    return true;
-  } catch (e) {
-    await Swal.fire({
-      icon: "error",
-      title: "No se pudieron guardar",
-      text: e.response?.data?.message || "No se pudieron registrar las incidencias.",
-      confirmButtonColor: "#922b21",
-    });
-    return false;
-  } finally {
-    guardandoIncidencias.value = false;
-  }
+async function registrarIncidenciasPendientes(opciones = {}) {
+  return registrarColeccion("incidencias", opciones);
 }
 
 async function guardarIncidenciasPendientes() {
@@ -719,6 +771,7 @@ function fechaHoraActualApi() {
 }
 
 function seleccionarCombustible(value) {
+  if (operacionEnCurso.value) return;
   if (NIVELES_COMBUSTIBLE.some((n) => n.value === value)) nivelRecepcion.value = value;
 }
 
@@ -735,6 +788,8 @@ function labelTipoCargo(tipo) {
 
 function labelTipoIncidencia(tipo) {
   const labels = {
+    "DANIO ESTETICO": "Daño estético",
+    "DANIO MECANICO": "Daño mecánico",
     DANIO: "Daño",
     ACCIDENTE: "Accidente",
     "FALLA MECANICA": "Falla mecánica",
@@ -762,23 +817,26 @@ function agregarCargoCombustible() {
 }
 
 async function irACobrarSaldo() {
+  if (operacionEnCurso.value || errorRecarga.value || !contrato.value) return;
   cobrando.value = true;
   try {
     if (cargos.value.length) {
-      const guardado = await registrarCargosPendientes();
+      const guardado = await registrarCargosPendientes({ desdeCobro: true });
       if (!guardado) return;
     }
     if (incidencias.value.length) {
-      const guardado = await registrarIncidenciasPendientes();
+      const guardado = await registrarIncidenciasPendientes({ desdeCobro: true });
       if (!guardado) return;
     }
-    router.push({ name: "pagos", query: { contrato_id: contrato.value.id, cobrar: "1" } });
+    cobrando.value = false;
+    await router.push({ name: "pagos", query: { contrato_id: contrato.value.id, cobrar: "1" } });
   } finally {
     cobrando.value = false;
   }
 }
 
 async function cerrarRenta() {
+  if (operacionEnCurso.value) return;
   if (mensajeBloqueoCierre.value) {
     await Swal.fire({
       icon: "warning",
@@ -802,7 +860,8 @@ async function cerrarRenta() {
     }
     await store.cerrarRenta(contrato.value.id, payload);
     toastSuccess("Renta cerrada", "Vehículo liberado.");
-    router.push({ name: "contratos" });
+    cerrando.value = false;
+    await router.push({ name: "contratos" });
   } catch (e) {
     Swal.fire({
       icon: "error",
@@ -817,6 +876,13 @@ async function cerrarRenta() {
 </script>
 
 <style scoped>
+.cierre-root button:disabled,
+.cierre-root input:disabled,
+.cierre-root select:disabled,
+.cierre-root textarea:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 .cierre-root--light {
   min-height: 100vh;
   background: linear-gradient(160deg, #fafafa 0%, #f3f4f6 55%, #fef2f2 100%);
