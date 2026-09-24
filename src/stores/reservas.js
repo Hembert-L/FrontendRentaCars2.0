@@ -3,6 +3,15 @@ import { computed, ref } from "vue";
 import api from "@/services/api";
 import { extractListFromApi, fetchAllPaginated } from "@/utils/apiPagination";
 
+function instanteDisponibilidad(value) {
+  const fecha = String(value || "").trim().replace(" ", "T");
+  if (!fecha) return NaN;
+  const fechaHora = /^\d{4}-\d{2}-\d{2}$/.test(fecha) ? `${fecha}T00:00:00` : fecha;
+  // Backend: America/El_Salvador (UTC-06). Respetar la zona de los datetime serializados por Laravel.
+  const tieneZona = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(fechaHora);
+  return Date.parse(tieneZona ? fechaHora : `${fechaHora}-06:00`);
+}
+
 export const useReservasStore = defineStore("reservas", () => {
   const reservas = ref([]);
   const loading = ref(false);
@@ -89,11 +98,52 @@ export const useReservasStore = defineStore("reservas", () => {
         (requestParams) => api.get("/admin/vehiculos", { params: requestParams }),
         params,
       );
-      return items;
+      return items.filter((vehiculo) => vehiculo.estado === "DISPONIBLE");
     } catch (e) {
       if (e.response?.status === 404) return [];
       throw e;
     }
+  }
+
+  async function fetchVehiculosDisponiblesParaReserva(fechaInicio, fechaFin) {
+    if (!fechaInicio || !fechaFin) return [];
+    const inicio = instanteDisponibilidad(fechaInicio);
+    const fin = instanteDisponibilidad(fechaFin);
+    if (!Number.isFinite(inicio) || !Number.isFinite(fin)) {
+      throw new Error("No se pudo comprobar la disponibilidad para las fechas seleccionadas.");
+    }
+    const params = { fecha_inicio: fechaInicio, fecha_fin: fechaFin };
+    const [vehiculos, contratos] = await Promise.allSettled([
+      fetchAllPaginated(
+        (requestParams) => api.get("/admin/vehiculos", { params: requestParams }),
+        params,
+      ),
+      fetchAllPaginated(
+        (requestParams) => api.get("/admin/contratos", { params: requestParams }),
+        { estado: "ACTIVO" },
+      ),
+    ]);
+    if (contratos.status === "rejected") {
+      throw new Error("No se pudieron consultar los contratos activos para comprobar la disponibilidad. Cambia o vuelve a seleccionar las fechas para reintentar.", { cause: contratos.reason });
+    }
+    if (vehiculos.status === "rejected") {
+      if (vehiculos.reason.response?.status === 404) return [];
+      throw vehiculos.reason;
+    }
+    const ocupados = new Set();
+    for (const contrato of contratos.value.items) {
+      if (contrato.estado_contrato !== "ACTIVO") continue;
+      const entrega = instanteDisponibilidad(contrato.fecha_hora_entrega);
+      const devolucion = instanteDisponibilidad(contrato.fecha_hora_devolucion);
+      const vehiculoId = Number(contrato.vehiculo_id ?? contrato.vehiculo?.id);
+      if (!vehiculoId || !Number.isFinite(entrega) || !Number.isFinite(devolucion)) {
+        throw new Error("No se pudo comprobar la disponibilidad: hay contratos activos con datos de vehículo o fechas incompletos.");
+      }
+      if (entrega < fin && devolucion > inicio) ocupados.add(vehiculoId);
+    }
+    return vehiculos.value.items.filter((vehiculo) =>
+      ["DISPONIBLE", "RENTADO"].includes(vehiculo.estado) && !ocupados.has(Number(vehiculo.id)),
+    );
   }
 
   async function fetchReserva(id) {
@@ -175,6 +225,7 @@ export const useReservasStore = defineStore("reservas", () => {
     crear,
     actualizar,
     fetchVehiculosDisponibles,
+    fetchVehiculosDisponiblesParaReserva,
     fetchReservasActivasCliente,
     cancelar,
     fetchCancelaciones,

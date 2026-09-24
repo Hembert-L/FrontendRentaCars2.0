@@ -32,14 +32,17 @@
             :cliente-seleccionado="clienteSeleccionado"
             :resultados="resultadosClientes"
             :buscando="buscandoClientes"
+            :error="errorListadoClientes"
+            :paginacion="paginacionClientes"
             @buscar="onBuscarCliente"
             @seleccionar="seleccionarCliente"
             @limpiar="limpiarCliente"
+            @cambiar-pagina="cambiarPaginaClientes"
             @agregar-nuevo="abrirModalCliente"
           />
 
           <ReservaFechas
-            v-if="clienteSeleccionado"
+            v-if="clientePuedeReservar"
             v-model:fecha-inicio="fechaInicio"
             v-model:fecha-fin="fechaFin"
             v-model:tipo-reserva="tipoReserva"
@@ -53,7 +56,7 @@
           />
 
           <ReservaVehiculosDisponibles
-            v-if="clienteSeleccionado"
+            v-if="clientePuedeReservar"
             :fecha-inicio="fechaInicio"
             :fecha-fin="fechaFin"
             :vehiculos="vehiculosDisponibles"
@@ -98,7 +101,7 @@
   </div>
 </template>
 <script setup>
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import ClientesModal from "@/components/clientes/ClientesModal.vue";
@@ -110,6 +113,7 @@ import { useClientesStore } from "@/stores/clientes";
 import { useReservasStore } from "@/stores/reservas";
 import { useAppTheme } from "@/composables/useAppTheme";
 import { fechaHoyLocal, sumarDiasISO, diasEntreFechasISO } from "@/utils/reservaFormatters";
+import { documentosVigentes } from "@/utils/contratoFormatters";
 import { toastSuccess } from "@/utils/toast";
 
 const router = useRouter();
@@ -118,14 +122,25 @@ const clientesStore = useClientesStore();
 const reservasStore = useReservasStore();
 
 const clienteSeleccionado = ref(null);
+const clientePuedeReservar = computed(() => documentosVigentes(clienteSeleccionado.value).ok);
+const mensajeLicencia = "No se puede reservar: la licencia debe vencer después de hoy. Actualiza la licencia desde Clientes para continuar.";
 const busquedaCliente = ref("");
 const resultadosClientes = ref([]);
 const buscandoClientes = ref(false);
+const errorListadoClientes = ref("");
+const paginacionClientes = ref({
+  current_page: 1,
+  last_page: 1,
+  total: 0,
+});
 const modalClienteAbierto = ref(false);
 const guardandoCliente = ref(false);
 const erroresCliente = ref({});
 const errorCliente = ref('');
 let debounceTimer = null;
+let consultaClientesVersion = 0;
+let consultaVehiculosTimer = null;
+let consultaVehiculosVersion = 0;
 
 const fechaInicio = ref("");
 const fechaFin = ref("");
@@ -185,7 +200,7 @@ const precioEstimado = computed(() => {
 
 const puedeConfirmar = computed(
   () =>
-    !!clienteSeleccionado.value &&
+    clientePuedeReservar.value &&
     !!fechaInicio.value &&
     !!fechaFin.value &&
     !!tipoReserva.value &&
@@ -194,37 +209,60 @@ const puedeConfirmar = computed(
     !errorFechaFin.value,
 );
 
+async function cargarClientes(page = 1) {
+  const version = ++consultaClientesVersion;
+  buscandoClientes.value = true;
+  errorListadoClientes.value = "";
+  await clientesStore.fetchClientes({
+    page,
+    ...(busquedaCliente.value.trim() ? { search: busquedaCliente.value.trim() } : {}),
+  });
+  if (version !== consultaClientesVersion) return;
+  resultadosClientes.value = [...clientesStore.clientes];
+  paginacionClientes.value = { ...clientesStore.pagination };
+  errorListadoClientes.value = clientesStore.error || "";
+  buscandoClientes.value = false;
+}
+
 function onBuscarCliente() {
   clearTimeout(debounceTimer);
-  if (!busquedaCliente.value.trim()) {
-    resultadosClientes.value = [];
-    return;
-  }
-  debounceTimer = setTimeout(async () => {
-    buscandoClientes.value = true;
-    resultadosClientes.value = await clientesStore.buscarClientes(busquedaCliente.value);
-    buscandoClientes.value = false;
+  debounceTimer = setTimeout(() => {
+    cargarClientes(1);
   }, 300);
 }
 
+function cambiarPaginaClientes(page) {
+  if (
+    buscandoClientes.value
+    || page < 1
+    || page > paginacionClientes.value.last_page
+    || page === paginacionClientes.value.current_page
+  ) return;
+  cargarClientes(page);
+}
+
 function seleccionarCliente(c) {
+  clearTimeout(debounceTimer);
+  debounceTimer = null;
   clienteSeleccionado.value = c;
-  busquedaCliente.value = c.nombre;
-  resultadosClientes.value = [];
   errorGlobal.value = "";
 }
 
 function limpiarCliente() {
+  clearTimeout(debounceTimer);
+  debounceTimer = null;
   clienteSeleccionado.value = null;
-  busquedaCliente.value = "";
-  resultadosClientes.value = [];
+  errorGlobal.value = "";
+}
+
+function limpiarDatosReserva() {
   fechaInicio.value = "";
   fechaFin.value = "";
   tipoReserva.value = "";
-  vehiculosDisponibles.value = [];
-  vehiculoSeleccionado.value = null;
-  vehiculosConsultados.value = false;
+  onFechasChange();
 }
+
+watch([clienteSeleccionado, clientePuedeReservar], limpiarDatosReserva, { flush: "sync" });
 
 function abrirModalCliente() {
   erroresCliente.value = {};
@@ -238,6 +276,11 @@ async function onClienteCreado(form) {
   errorCliente.value = '';
   try {
     const creado = await clientesStore.crear(form);
+    resultadosClientes.value = [
+      creado,
+      ...resultadosClientes.value.filter((cliente) => cliente.id !== creado.id),
+    ];
+    paginacionClientes.value.total = Number(paginacionClientes.value.total || 0) + 1;
     seleccionarCliente(creado);
     modalClienteAbierto.value = false;
     toastSuccess("Cliente registrado", `${creado.nombre} se agregó correctamente.`);
@@ -252,8 +295,13 @@ async function onClienteCreado(form) {
 }
 
 function onFechasChange() {
+  clearTimeout(consultaVehiculosTimer);
+  consultaVehiculosTimer = null;
+  consultaVehiculosVersion++;
+  errorGlobal.value = "";
   errorFechaInicio.value = "";
   errorFechaFin.value = "";
+  cargandoVehiculos.value = false;
   vehiculosConsultados.value = false;
   vehiculosDisponibles.value = [];
   vehiculoSeleccionado.value = null;
@@ -291,37 +339,51 @@ function validarFechas() {
 }
 
 async function consultarVehiculos() {
-  if (!validarFechas()) return;
+  if (!documentosVigentes(clienteSeleccionado.value).ok || !validarFechas()) return;
+  const version = ++consultaVehiculosVersion;
   errorGlobal.value = "";
   cargandoVehiculos.value = true;
   vehiculosConsultados.value = false;
   vehiculoSeleccionado.value = null;
+  vehiculosDisponibles.value = [];
   try {
-    vehiculosDisponibles.value = await reservasStore.fetchVehiculosDisponibles(
+    const disponibles = await reservasStore.fetchVehiculosDisponiblesParaReserva(
       fechaInicio.value,
       fechaFin.value,
     );
+    if (version !== consultaVehiculosVersion || !documentosVigentes(clienteSeleccionado.value).ok) return;
+    vehiculosDisponibles.value = disponibles;
     vehiculosConsultados.value = true;
   } catch (e) {
-    errorGlobal.value = e.response?.data?.message || "No se pudieron consultar los vehículos.";
+    if (version !== consultaVehiculosVersion || !documentosVigentes(clienteSeleccionado.value).ok) return;
+    errorGlobal.value = e.response?.data?.message || e.message || "No se pudieron consultar los vehículos.";
     vehiculosDisponibles.value = [];
-    vehiculosConsultados.value = true;
+    vehiculosConsultados.value = false;
   } finally {
-    cargandoVehiculos.value = false;
+    if (version === consultaVehiculosVersion) cargandoVehiculos.value = false;
   }
 }
 
-let consultaVehiculosTimer = null;
 watch([fechaInicio, fechaFin], () => {
   onFechasChange();
-  clearTimeout(consultaVehiculosTimer);
-  if (!fechaInicio.value || !fechaFin.value) return;
+  if (!clientePuedeReservar.value || !fechaInicio.value || !fechaFin.value) return;
   consultaVehiculosTimer = setTimeout(() => {
-    if (validarFechas()) consultarVehiculos();
+    consultaVehiculosTimer = null;
+    consultarVehiculos();
   }, 400);
 });
 
+onMounted(() => cargarClientes(1));
+
+onUnmounted(() => {
+  clearTimeout(debounceTimer);
+  clearTimeout(consultaVehiculosTimer);
+  consultaClientesVersion++;
+  consultaVehiculosVersion++;
+});
+
 function seleccionarVehiculo(v) {
+  if (!documentosVigentes(clienteSeleccionado.value).ok) return;
   vehiculoSeleccionado.value = v;
   errorGlobal.value = "";
 }
@@ -329,6 +391,11 @@ function seleccionarVehiculo(v) {
 async function confirmarReserva() {
   if (!clienteSeleccionado.value) {
     errorGlobal.value = "Selecciona un cliente.";
+    return;
+  }
+  if (!documentosVigentes(clienteSeleccionado.value).ok) {
+    limpiarDatosReserva();
+    errorGlobal.value = mensajeLicencia;
     return;
   }
   if (!validarFechas()) return;
