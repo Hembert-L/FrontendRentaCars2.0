@@ -366,7 +366,7 @@
                   {{ r.vehiculo?.placa ?? "—" }}
                 </td>
                 <td class="py-3 text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
-                  {{ r.fecha_inicio }}
+                  {{ formatFecha(r.fecha_inicio) }}
                 </td>
                 <td class="py-3">
                   <span
@@ -404,6 +404,7 @@ import api from "@/services/api";
 import DashboardProgressRow from "@/components/dashboard/DashboardProgressRow.vue";
 import DashboardDonutChart from "@/components/dashboard/DashboardDonutChart.vue";
 import DashboardBarChart from "@/components/dashboard/DashboardBarChart.vue";
+import { formatFecha } from "@/utils/reservaFormatters";
 
 const { isDark } = useAppTheme();
 const authStore = useAuthStore();
@@ -446,13 +447,14 @@ const ultimasReservas = ref([]);
 async function fetchDashboard() {
   try {
     loading.value = true;
-    const { data } = await api.get("/dashboard/resumen");
+    const { data } = await api.get("/admin/dashboard/resumen");
     resumen.value = data.resumen;
     reservasPorMes.value = data.graficas.reservas_por_mes;
     vehiculosPorEstado.value = data.graficas.vehiculos_por_estado;
     ultimasReservas.value = data.ultimas_reservas;
   } catch (e) {
-    error.value = e.message;
+    // Muestra el motivo real (p. ej. el 403 "No tienes permiso..." para el rol CONTADOR).
+    error.value = e.response?.data?.message || e.message;
   } finally {
     loading.value = false;
   }

@@ -20,6 +20,18 @@
         />
       </div>
       <div class="flex gap-2 flex-wrap">
+        <select
+          :value="filtroEstado"
+          aria-label="Filtrar por estado"
+          class="px-3 py-2 rounded-xl text-xs font-bold border focus:outline-none"
+          :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-200' : 'border-gray-200 bg-white text-gray-600'"
+          @change="$emit('update:filtroEstado', $event.target.value)"
+        >
+          <option value="">Todos los estados</option>
+          <option value="ACTIVO">Activo</option>
+          <option value="INACTIVO">Inactivo</option>
+          <option value="BLOQUEADO">Bloqueado</option>
+        </select>
         <button
           v-for="f in filtros"
           :key="f.value"
@@ -174,6 +186,7 @@ defineProps({
   usuarios:     { type: Array, default: () => [] },
   search:       String,
   filtroActivo: String,
+  filtroEstado: { type: String, default: '' },
   filtros:      Array,
   loading:      { type: Boolean, default: false },
   pagination:   {
@@ -182,7 +195,7 @@ defineProps({
   },
 })
 
-defineEmits(['update:search', 'update:filtro', 'editar', 'cambiar-estado', 'cambiar-pagina'])
+defineEmits(['update:search', 'update:filtro', 'update:filtroEstado', 'editar', 'cambiar-estado', 'cambiar-pagina'])
 
 const colores = ['#c0392b','#f0a500','#2563eb','#16a34a','#7c3aed','#0891b2']
 

@@ -211,6 +211,7 @@
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <span>
             Mostrando {{ pagination.from }}-{{ pagination.to }} de {{ pagination.total }} reserva{{ pagination.total !== 1 ? 's' : '' }}
+            <span class="opacity-75">(las canceladas se consultan en Cancelaciones)</span>
           </span>
           <div class="flex items-center gap-2">
             <button
@@ -321,13 +322,21 @@ function reservasParams(page = pagination.value.current_page || 1) {
   return params
 }
 
+function pedirReservas(page) {
+  // Sin filtro de estado, el servidor devolvería también las canceladas; se
+  // excluyen antes de paginar para que filas y totales coincidan.
+  return filtroEstado.value
+    ? store.fetchReservas(reservasParams(page))
+    : store.fetchReservasSinCanceladas(reservasParams(page), page)
+}
+
 async function cargarReservas(page = pagination.value.current_page || 1) {
   await Promise.all([
-    store.fetchReservas(reservasParams(page)),
+    pedirReservas(page),
     cargarAsociacionesContratos(),
   ])
   if (page > 1 && reservas.value.length === 0) {
-    await store.fetchReservas(reservasParams(page - 1))
+    await pedirReservas(page - 1)
   }
 }
 

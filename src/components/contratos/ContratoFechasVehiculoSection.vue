@@ -7,15 +7,25 @@
         : 'Horarios permitidos: 6:00-7:00 AM y 6:00-7:00 PM. Los vehículos se consultan al elegir fechas.' }}
     </p>
 
+    <p v-if="bloqueado" class="text-xs mb-2 -mt-1 rounded-xl p-3 border font-semibold" :class="isDark ? 'text-amber-300 bg-amber-950/30 border-amber-900/40' : 'text-amber-700 bg-amber-50 border-amber-100'">
+      <i class="pi pi-lock mr-1"></i> Las fechas y el vehículo los define la reserva y no se pueden cambiar aquí.
+      Si necesitas otras fechas, edita primero la reserva.
+    </p>
+
+    <!--
+      Desde una reserva, Laravel exige que las fechas del contrato sean
+      exactamente las de la reserva (que no guarda hora), por eso no se
+      permite editarlas ni elegir horario.
+    -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div v-if="!modoDirecto">
         <label class="text-xs font-semibold mb-1 block" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Entrega - fecha</label>
         <div class="relative">
           <i class="pi pi-calendar input-icon"></i>
-          <input :value="fechaEntrega" type="date" :min="hoy" class="field-input" @input="$emit('update:fechaEntrega', $event.target.value)" />
+          <input :value="fechaEntrega" type="date" :min="bloqueado ? undefined : hoy" :disabled="bloqueado" class="field-input" @input="$emit('update:fechaEntrega', $event.target.value)" />
         </div>
       </div>
-      <div v-if="!modoDirecto">
+      <div v-if="!modoDirecto && !bloqueado">
         <label class="text-xs font-semibold mb-1 block" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Entrega - hora</label>
         <select :value="horaEntrega" class="field-input field-input--plain" @change="$emit('update:horaEntrega', $event.target.value)">
           <option v-for="op in HORAS_PERMITIDAS_OPCIONES" :key="'e' + op.value" :value="op.value">{{ op.label }}</option>
@@ -25,10 +35,10 @@
         <label class="text-xs font-semibold mb-1 block" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Devolución - fecha</label>
         <div class="relative">
           <i class="pi pi-calendar input-icon"></i>
-          <input :value="fechaDevolucion" type="date" :min="minFechaDevolucion" class="field-input" @input="$emit('update:fechaDevolucion', $event.target.value)" />
+          <input :value="fechaDevolucion" type="date" :min="bloqueado ? undefined : minFechaDevolucion" :disabled="bloqueado" class="field-input" @input="$emit('update:fechaDevolucion', $event.target.value)" />
         </div>
       </div>
-      <div v-if="!modoDirecto">
+      <div v-if="!modoDirecto && !bloqueado">
         <label class="text-xs font-semibold mb-1 block" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Devolución - hora</label>
         <select :value="horaDevolucion" class="field-input field-input--plain" @change="$emit('update:horaDevolucion', $event.target.value)">
           <option v-for="op in HORAS_PERMITIDAS_OPCIONES" :key="'d' + op.value" :value="op.value">{{ op.label }}</option>
@@ -70,8 +80,13 @@
           :key="v.id"
           type="button"
           class="reserva-card rounded-xl text-left transition-all overflow-hidden"
-          :class="{ 'reserva-card--selected': esVehiculoSeleccionado(v) }"
-          @click="$emit('update:vehiculoId', v.id)"
+          :class="{
+            'reserva-card--selected': esVehiculoSeleccionado(v),
+            'reserva-card--bloqueada': bloqueado && !esVehiculoSeleccionado(v),
+          }"
+          :disabled="bloqueado && !esVehiculoSeleccionado(v)"
+          :title="bloqueado && !esVehiculoSeleccionado(v) ? 'El vehículo de esta reserva no se puede cambiar aquí' : ''"
+          @click="seleccionarVehiculo(v)"
         >
           <div class="card-header">
             <div class="flex items-start gap-3 min-w-0 flex-1">
@@ -145,9 +160,14 @@ const props = defineProps({
   cargando:        { type: Boolean, default: false },
   consultados:     { type: Boolean, default: false },
   modoDirecto:     { type: Boolean, default: false },
+  // Cuando el contrato viene de una reserva, Laravel usa el vehículo ya
+  // asignado a esa reserva (no el que se envíe en el payload). Si aquí se
+  // dejara elegir otro vehículo, la pantalla mostraría un vehículo/tarifa
+  // que Laravel terminaría ignorando. Por eso el selector se bloquea.
+  bloqueado:       { type: Boolean, default: false },
 })
 
-defineEmits(['update:fechaEntrega', 'update:horaEntrega', 'update:fechaDevolucion', 'update:horaDevolucion', 'update:vehiculoId'])
+const emit = defineEmits(['update:fechaEntrega', 'update:horaEntrega', 'update:fechaDevolucion', 'update:horaDevolucion', 'update:vehiculoId'])
 
 const { isDark } = useAppTheme()
 const hoy = new Date().toISOString().split('T')[0]
@@ -233,6 +253,11 @@ function esVehiculoSeleccionado(vehiculo) {
   return String(props.vehiculoId) === String(vehiculo.id)
 }
 
+function seleccionarVehiculo(vehiculo) {
+  if (props.bloqueado && !esVehiculoSeleccionado(vehiculo)) return
+  emit('update:vehiculoId', vehiculo.id)
+}
+
 function textoVehiculo(vehiculo) {
   return [
     nombreVehiculo(vehiculo),
@@ -259,6 +284,7 @@ function normalizarBusqueda(valor) {
 .input-icon { position:absolute; left:0.75rem; top:50%; transform:translateY(-50%); font-size:0.875rem; pointer-events:none; }
 .field-input { width:100%; padding:0.75rem 1rem 0.75rem 2.5rem; border-radius:0.75rem; font-size:0.875rem; outline:none; }
 .field-input--plain { padding-left:1rem; }
+.field-input:disabled { opacity:0.7; cursor:not-allowed; }
 .form-section-light .field-label { color:#4b5563; }
 .form-section-light .input-icon { color:#9ca3af; }
 .form-section-light .field-input { border:1px solid #d1d5db; background:#fff; color:#1f2937; }
@@ -267,6 +293,7 @@ function normalizarBusqueda(valor) {
 .form-section-dark .field-input { border:1px solid #4b5563; background:#1f2937; color:#f3f4f6; }
 .reserva-card { background:#922b21; color:#fff; border:2px solid transparent; display:flex; flex-direction:column; }
 .reserva-card--selected { border-color:#f0a500; box-shadow:0 0 0 3px rgba(240,165,0,0.35); }
+.reserva-card--bloqueada { opacity:0.45; cursor:not-allowed; filter:grayscale(0.3); }
 .card-header { display:flex; align-items:flex-start; justify-content:space-between; gap:0.75rem; padding:1rem 1rem 0.75rem; }
 .card-icon-wrap { width:2.75rem; height:2.75rem; border-radius:0.75rem; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.18); }
 .card-selected-badge { width:1.5rem; height:1.5rem; border-radius:9999px; display:flex; align-items:center; justify-content:center; background:#fff; color:#922b21; }

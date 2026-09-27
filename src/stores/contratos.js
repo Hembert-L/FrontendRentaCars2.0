@@ -120,6 +120,28 @@ export const useContratosStore = defineStore('contratos', () => {
     })), alConfirmar)
   }
 
+  // Laravel recalcula monto_total_renta y estado_pago al editar o eliminar.
+  async function actualizarCargo(id, datos) {
+    const res = await api.put(`/admin/cargos-adicionales/${id}`, datos)
+    return res.data.data
+  }
+
+  async function eliminarCargo(id) {
+    await api.delete(`/admin/cargos-adicionales/${id}`)
+  }
+
+  async function actualizarIncidencia(id, datos) {
+    const res = await api.put(`/admin/incidencias/${id}`, datos)
+    return res.data.data
+  }
+
+  // DELETE en Laravel no borra: marca la incidencia como ANULADA y revierte
+  // el cobro al cliente si lo había. Solo ADMINISTRADOR puede hacerlo.
+  async function anularIncidencia(id) {
+    const res = await api.delete(`/admin/incidencias/${id}`)
+    return res.data.data
+  }
+
   return {
     contratos,
     loading,
@@ -132,5 +154,9 @@ export const useContratosStore = defineStore('contratos', () => {
     cerrarRenta,
     syncCargos,
     syncIncidencias,
+    actualizarCargo,
+    eliminarCargo,
+    actualizarIncidencia,
+    anularIncidencia,
   }
 })

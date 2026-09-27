@@ -99,12 +99,23 @@
               </button>
               <button
                 type="button"
+                class="action-btn action-btn--ghost"
+                :disabled="generando === reporte.id"
+                title="Descargar el PDF como archivo"
+                @click="generarReporte(reporte, 'descargar')"
+              >
+                <i class="pi pi-download"></i>
+                Descargar
+              </button>
+              <button
+                type="button"
                 class="action-btn action-btn--primary"
                 :disabled="generando === reporte.id"
-                @click="generarReporte(reporte)"
+                title="Abrir el PDF en una pestaña nueva"
+                @click="generarReporte(reporte, 'abrir')"
               >
                 <i :class="generando === reporte.id ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'"></i>
-                {{ generando === reporte.id ? 'Generando...' : 'Generar' }}
+                {{ generando === reporte.id ? 'Generando...' : 'Abrir PDF' }}
               </button>
             </div>
           </div>
@@ -118,7 +129,8 @@
 import { reactive, ref, onMounted } from 'vue'
 import Swal from 'sweetalert2'
 import { useAppTheme } from '@/composables/useAppTheme'
-import { abrirPdf } from '@/utils/pdfDownload'
+import { abrirPdf, descargarPdf } from '@/utils/pdfDownload'
+import { toastSuccess } from '@/utils/toast'
 
 const { isDark } = useAppTheme()
 const generando = ref('')
@@ -137,7 +149,7 @@ const reportes = [
   {
     id: 'desempeno-general',
     titulo: 'Desempeño general',
-    descripcion: 'Resumen ejecutivo de ingresos, contratos, ocupación de flota, clientes nuevos y gastos de mantenimiento.',
+    descripcion: 'Resumen ejecutivo de ingresos, contratos, ocupación de flota, clientes nuevos y gastos por incidencias asumidas por el negocio.',
     icono: 'pi-chart-line',
     endpoint: '/admin/reportes/desempeno-general',
     needsPeriod: true,
@@ -185,7 +197,9 @@ const reportes = [
   {
     id: 'gastos-por-vehiculo',
     titulo: 'Gastos por vehículo',
-    descripcion: 'Gastos por mantenimientos e incidencias asumidas por el negocio, agrupados por vehículo.',
+    // Laravel (ReporteController::gastosPorVehiculo) solo suma incidencias con
+    // responsable NEGOCIO; los mantenimientos no entran en este cálculo.
+    descripcion: 'Costo de las incidencias asumidas por el negocio, agrupado por vehículo. No incluye mantenimientos.',
     icono: 'pi-wrench',
     endpoint: '/admin/reportes/gastos-por-vehiculo',
     needsPeriod: true,
@@ -193,10 +207,19 @@ const reportes = [
   {
     id: 'resultado-neto-por-vehiculo',
     titulo: 'Resultado neto por vehículo',
-    descripcion: 'Comparativo de ingresos, gastos y resultado neto por cada vehículo.',
+    descripcion: 'Comparativo por vehículo de ingresos confirmados, gastos por incidencias del negocio y resultado neto.',
     icono: 'pi-chart-pie',
     endpoint: '/admin/reportes/resultado-neto-por-vehiculo',
     needsPeriod: true,
+  },
+  {
+    id: 'resultado-neto-por-propietario',
+    titulo: 'Resultado neto por propietario',
+    descripcion: 'Ingresos, gastos por incidencias del negocio y resultado neto agrupados por propietario de vehículos.',
+    icono: 'pi-wallet',
+    endpoint: '/admin/reportes/resultado-neto-por-propietario',
+    needsPeriod: true,
+    needsPropietario: true,
   },
   {
     id: 'saldos-pendientes',
@@ -251,7 +274,7 @@ function limpiarFiltros(reporte) {
   if (reporte.needsPeriod) seleccionarPeriodo('mes')
 }
 
-async function generarReporte(reporte) {
+async function generarReporte(reporte, modo = 'abrir') {
   const error = validarReporte(reporte)
   if (error) {
     await mostrarAlerta('warning', 'Revisa los filtros', error)
@@ -260,7 +283,17 @@ async function generarReporte(reporte) {
 
   generando.value = reporte.id
   try {
-    await abrirPdf(reporte.endpoint, paramsReporte(reporte))
+    // abrirPdf debe llamarse sin ningún await previo para que el navegador
+    // asocie la pestaña nueva al clic y no la bloquee.
+    const resultado = modo === 'descargar'
+      ? await descargarPdf(reporte.endpoint, paramsReporte(reporte), `reporte-${reporte.id}.pdf`)
+      : await abrirPdf(reporte.endpoint, paramsReporte(reporte))
+    toastSuccess(
+      'Reporte generado',
+      resultado?.modo === 'descarga'
+        ? `Se descargó ${resultado.filename}.`
+        : 'El PDF se abrió en una pestaña nueva.',
+    )
   } catch (e) {
     await mostrarAlerta('error', 'No se pudo generar', e.response?.data?.message || e.message || 'Intenta de nuevo.')
   } finally {
@@ -544,9 +577,13 @@ onMounted(() => {
 
 .reporte-actions {
   display: flex;
-  justify-content: space-between;
-  gap: 1rem;
+  justify-content: flex-end;
+  gap: 0.75rem;
   margin-top: 0.4rem;
+}
+
+.reporte-actions > .action-btn:first-child {
+  margin-right: auto;
 }
 
 .action-btn {

@@ -62,6 +62,62 @@
       {{ advertenciaCierres }}
     </p>
 
+    <!-- Búsqueda y filtros del historial -->
+    <div
+      class="rounded-2xl border shadow-sm p-4 mb-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end"
+      :class="isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'"
+    >
+      <div class="relative sm:col-span-2 lg:col-span-2">
+        <label class="text-xs font-semibold mb-1 block" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Buscar</label>
+        <i class="pi pi-search absolute left-3 bottom-3 text-sm pointer-events-none" :class="isDark ? 'text-gray-500' : 'text-gray-400'"></i>
+        <input
+          v-model="filtros.busqueda"
+          type="text"
+          placeholder="N.º de contrato, cliente o DUI..."
+          class="w-full pl-9 pr-4 py-2.5 rounded-xl border text-sm focus:outline-none"
+          :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-100 placeholder:text-gray-500' : 'border-gray-200 bg-gray-50'"
+        />
+      </div>
+      <div>
+        <label class="text-xs font-semibold mb-1 block" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Estado</label>
+        <select v-model="filtros.estado" class="w-full px-3 py-2.5 rounded-xl border text-sm focus:outline-none"
+          :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-100' : 'border-gray-200 bg-gray-50'">
+          <option value="">Todos</option>
+          <option value="CONFIRMADO">Confirmado</option>
+          <option value="CANCELADO">Cancelado</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs font-semibold mb-1 block" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Método</label>
+        <select v-model="filtros.metodo" class="w-full px-3 py-2.5 rounded-xl border text-sm focus:outline-none"
+          :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-100' : 'border-gray-200 bg-gray-50'">
+          <option value="">Todos</option>
+          <option value="EFECTIVO">Efectivo</option>
+          <option value="TRANSFERENCIA">Transferencia</option>
+          <option value="DEPOSITO">Depósito</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs font-semibold mb-1 block" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Desde</label>
+        <input v-model="filtros.desde" type="date" class="w-full px-3 py-2.5 rounded-xl border text-sm focus:outline-none"
+          :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-100' : 'border-gray-200 bg-gray-50'" />
+      </div>
+      <div>
+        <label class="text-xs font-semibold mb-1 block" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Hasta</label>
+        <input v-model="filtros.hasta" type="date" :min="filtros.desde || undefined" class="w-full px-3 py-2.5 rounded-xl border text-sm focus:outline-none"
+          :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-100' : 'border-gray-200 bg-gray-50'" />
+      </div>
+      <button
+        v-if="hayFiltros"
+        type="button"
+        class="sm:col-span-2 lg:col-span-6 justify-self-end text-xs font-bold underline"
+        style="color:#c0392b;"
+        @click="limpiarFiltros"
+      >
+        Limpiar filtros
+      </button>
+    </div>
+
     <!-- Tabla historial -->
     <div
       class="rounded-2xl border shadow-sm overflow-hidden"
@@ -133,10 +189,12 @@
                 </span>
               </td>
             </tr>
-            <tr v-if="!pagosStore.pagos.length">
+            <tr v-if="!pagosFiltrados.length">
               <td colspan="7" class="px-5 py-16 text-center">
                 <i class="pi pi-dollar text-4xl mb-3 block" :class="isDark ? 'text-gray-700' : 'text-gray-200'"></i>
-                <p class="font-medium" :class="isDark ? 'text-gray-500' : 'text-gray-400'">No hay pagos registrados</p>
+                <p class="font-medium" :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+                  {{ pagosStore.pagos.length ? 'Ningún pago coincide con los filtros' : 'No hay pagos registrados' }}
+                </p>
               </td>
             </tr>
           </tbody>
@@ -147,7 +205,7 @@
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <span>
             Mostrando {{ pagination.from }}-{{ pagination.to }} de {{ pagination.total }} pago{{ pagination.total !== 1 ? 's' : '' }}
-            · Total: ${{ formatPrecio(totalCobrado) }}
+            · Total confirmado{{ hayFiltros ? ' (filtrado)' : '' }}: ${{ formatPrecio(totalCobrado) }}
           </span>
           <div class="flex items-center gap-2">
             <button
@@ -185,7 +243,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import Swal from 'sweetalert2'
 import PagoRegistrarModal from '@/components/pagos/PagoRegistrarModal.vue'
@@ -262,12 +320,48 @@ function saldoLabel(c) {
   return `Total $${formatPrecio(totalFinalContrato(c))}`
 }
 
-const totalCobrado = computed(() => pagosStore.pagos
+const filtros = reactive({ busqueda: '', estado: '', metodo: '', desde: '', hasta: '' })
+const hayFiltros = computed(() => Object.values(filtros).some(Boolean))
+
+function normalizarTexto(valor) {
+  return String(valor ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+}
+
+function fechaPagoISO(pago) {
+  const fecha = new Date(pago.fecha_pago)
+  if (Number.isNaN(fecha.getTime())) return String(pago.fecha_pago || '').slice(0, 10)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${fecha.getFullYear()}-${pad(fecha.getMonth() + 1)}-${pad(fecha.getDate())}`
+}
+
+// Todos los pagos ya están cargados en el store, así que se filtra localmente.
+const pagosFiltrados = computed(() => {
+  const termino = normalizarTexto(filtros.busqueda)
+  return pagosStore.pagos.filter((p) => {
+    if (filtros.estado && p.estado_transaccion !== filtros.estado) return false
+    if (filtros.metodo && p.metodo_pago !== filtros.metodo) return false
+    const fecha = fechaPagoISO(p)
+    if (filtros.desde && fecha < filtros.desde) return false
+    if (filtros.hasta && fecha > filtros.hasta) return false
+    if (!termino) return true
+    const contrato = contratoPago(p)
+    return [contrato?.numero_contrato, nombreCliente(contrato), contrato?.info_registro?.cliente?.dui]
+      .some((valor) => normalizarTexto(valor).includes(termino))
+  })
+})
+
+function limpiarFiltros() {
+  Object.assign(filtros, { busqueda: '', estado: '', metodo: '', desde: '', hasta: '' })
+}
+
+watch(filtros, () => { paginaActual.value = 1 })
+
+const totalCobrado = computed(() => pagosFiltrados.value
   .filter((p) => p.estado_transaccion === 'CONFIRMADO')
   .reduce((s, p) => s + Number(p.monto || 0), 0))
 
 const pagination = computed(() => {
-  const total = pagosStore.pagos.length
+  const total = pagosFiltrados.value.length
   const lastPage = Math.max(1, Math.ceil(total / pagosPorPagina))
   const currentPage = Math.min(paginaActual.value, lastPage)
   const from = total ? ((currentPage - 1) * pagosPorPagina) + 1 : 0
@@ -285,7 +379,7 @@ const pagination = computed(() => {
 
 const pagosPaginados = computed(() => {
   const start = (pagination.value.current_page - 1) * pagosPorPagina
-  return pagosStore.pagos.slice(start, start + pagosPorPagina)
+  return pagosFiltrados.value.slice(start, start + pagosPorPagina)
 })
 
 const puedeRetroceder = computed(() => pagination.value.current_page > 1)
@@ -335,7 +429,7 @@ function cerrarRegistro() {
 }
 
 watch(
-  () => pagosStore.pagos.length,
+  () => pagosFiltrados.value.length,
   () => {
     if (paginaActual.value > pagination.value.last_page) {
       paginaActual.value = pagination.value.last_page
@@ -543,7 +637,12 @@ function fmt(v) {
 }
 
 function nombreCliente(contrato) {
-  return contrato?.cliente?.nombre || contrato?.reserva?.cliente?.nombre || 'Cliente no disponible'
+  // El listado de contratos no incluye la relación `cliente`; cada contrato
+  // guarda una copia en info_registro.cliente desde que se crea.
+  return contrato?.cliente?.nombre
+    || contrato?.reserva?.cliente?.nombre
+    || contrato?.info_registro?.cliente?.nombre
+    || 'Cliente no disponible'
 }
 
 function nombreClientePago(pago) {

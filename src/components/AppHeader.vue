@@ -1,9 +1,21 @@
 <template>
   <header
-    class="fixed top-0 right-0 z-40 flex items-center gap-4 px-6 shadow-sm transition-colors border-b"
+    class="fixed top-0 right-0 z-40 flex items-center gap-2 sm:gap-4 px-3 sm:px-6 shadow-sm transition-colors border-b"
     :class="isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'"
     :style="{ left: sidebarWidth, height: '64px' }"
   >
+    <button
+      v-if="movil"
+      type="button"
+      class="w-10 h-10 rounded-lg flex items-center justify-center transition-colors"
+      :class="isDark ? 'text-gray-200 hover:bg-gray-800' : 'text-gray-700 hover:bg-gray-100'"
+      title="Abrir menú"
+      aria-label="Abrir menú"
+      @click="$emit('abrir-menu')"
+    >
+      <i class="pi pi-bars text-lg" />
+    </button>
+
     <div class="relative flex items-center gap-2 ml-auto">
       <NotificationBell
         v-if="puedeConsultarNotificaciones"
@@ -23,7 +35,7 @@
         >
           {{ userInitials }}
         </div>
-        <div class="flex flex-col items-start leading-tight">
+        <div class="hidden sm:flex flex-col items-start leading-tight">
           <span class="text-sm font-semibold" :class="isDark ? 'text-gray-100' : 'text-gray-800'">{{
             userName
           }}</span>
@@ -70,13 +82,22 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  movil: {
+    type: Boolean,
+    default: false,
+  },
 });
+
+defineEmits(["abrir-menu"]);
 
 const userMenuOpen = ref(false);
 const notifPanelOpen = ref(false);
 const bellRef = ref(null);
 
-const sidebarWidth = computed(() => (props.sidebarCollapsed ? "64px" : "256px"));
+const sidebarWidth = computed(() => {
+  if (props.movil) return "0px";
+  return props.sidebarCollapsed ? "64px" : "256px";
+});
 const puedeConsultarNotificaciones = computed(() =>
   authStore.userRoles.some((role) => ["ADMINISTRADOR", "EMPLEADO"].includes(role)),
 );

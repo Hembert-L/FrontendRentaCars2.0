@@ -71,6 +71,7 @@
               :cargando="cargandoVehiculos"
               :consultados="vehiculosConsultados"
               :modo-directo="!esDesdeReserva"
+              :bloqueado="esDesdeReserva"
             />
             <ContratoPreciosInspeccionSection
               v-else
@@ -85,6 +86,8 @@
 
         <p v-if="error" class="wizard-error">{{ error }}</p>
         <p v-if="mensajeContratoActivo" class="wizard-error">{{ mensajeContratoActivo }}</p>
+        <p v-if="mensajeReservaTraslapada" class="wizard-error">{{ mensajeReservaTraslapada }}</p>
+        <p v-if="mensajeVehiculoReserva" class="wizard-error">{{ mensajeVehiculoReserva }}</p>
 
         <!-- Navegación -->
         <div class="wizard-nav">
@@ -119,9 +122,9 @@
       <ContratoResumen
         :cliente="cliente"
         :fecha-entrega="fechaEntrega"
-        :hora-entrega="horaEntrega"
+        :hora-entrega="esDesdeReserva ? '' : horaEntrega"
         :fecha-devolucion="fechaDevolucion"
-        :hora-devolucion="horaDevolucion"
+        :hora-devolucion="esDesdeReserva ? '' : horaDevolucion"
         :vehiculo="vehiculoSel"
         :dias="dias"
         :total-estimado="totalEstimado"
@@ -148,8 +151,8 @@ import ContratoPdfPreview from '@/components/contratos/ContratoPdfPreview.vue'
 import { useContratosStore } from '@/stores/contratos'
 import { useReservasStore } from '@/stores/reservas'
 import { useAppTheme } from '@/composables/useAppTheme'
-import { calcularDias, documentosVigentes } from '@/utils/contratoFormatters'
-import { fechaHoyLocal } from '@/utils/reservaFormatters'
+import { calcularDias, documentosVigentes, reservaChocaConContratoDirecto } from '@/utils/contratoFormatters'
+import { fechaHoyLocal, formatFecha } from '@/utils/reservaFormatters'
 import { toastSuccess } from '@/utils/toast'
 
 const router = useRouter()
@@ -161,6 +164,8 @@ const reservasStore = useReservasStore()
 const reservaId = ref(route.query.reserva_id ? Number(route.query.reserva_id) : null)
 const reservaOrigen = ref(null)
 const reservasCliente = ref([])
+// Incluye también las CONFIRMADAS; solo se usa para detectar traslapes.
+const reservasVigentesCliente = ref([])
 const cargandoReservasCliente = ref(false)
 const sinReservaDisponible = ref(false)
 const cargandoReserva = ref(false)
@@ -223,12 +228,39 @@ const mensajeContratoActivo = computed(() => {
   return `Este cliente ya tiene un contrato activo (${contratoActivoCliente.value.numero_contrato}). Debe cerrarse antes de generar otro contrato.`
 })
 
+// Un contrato directo (sin reserva) no debe poder generarse con fechas que
+// se crucen con una reserva PENDIENTE o CONFIRMADA del mismo cliente: antes
+// esto avanzaba hasta el final y Laravel lo rechazaba recién al confirmar.
+const reservaTraslapada = computed(() => {
+  if (esDesdeReserva.value) return null
+  if (!fechaEntrega.value || !fechaDevolucion.value) return null
+  return reservasVigentesCliente.value.find((r) =>
+    reservaChocaConContratoDirecto(fechaEntrega.value, fechaDevolucion.value, r),
+  ) || null
+})
+const mensajeReservaTraslapada = computed(() => {
+  if (!reservaTraslapada.value) return ''
+  const r = reservaTraslapada.value
+  const estado = r.estado === 'CONFIRMADA' ? 'confirmada' : 'pendiente'
+  const sugerencia = r.estado === 'PENDIENTE'
+    ? 'Acorta los días o genera el contrato desde esa reserva.'
+    : 'Acorta los días de la renta.'
+  return `Las fechas elegidas chocan con la reserva ${estado} #${r.id} de este cliente (${formatFecha(r.fecha_inicio)} - ${formatFecha(r.fecha_fin)}). ${sugerencia}`
+})
+
 const dias = computed(() => calcularDias(fechaEntrega.value, fechaDevolucion.value))
 const vehiculoSel = computed(() => {
-  const fromList = vehiculos.value.find((v) => v.id === vehiculoId.value)
+  if (!vehiculoId.value) return null
+  const fromList = vehiculos.value.find((v) => Number(v.id) === Number(vehiculoId.value))
   if (fromList) return fromList
-  if (reservaOrigen.value?.vehiculo?.id === vehiculoId.value) return reservaOrigen.value.vehiculo
+  if (Number(reservaOrigen.value?.vehiculo?.id) === Number(vehiculoId.value)) return reservaOrigen.value.vehiculo
   return null
+})
+// Laravel exige que el vehículo de la reserva esté DISPONIBLE al generar.
+const mensajeVehiculoReserva = computed(() => {
+  if (!esDesdeReserva.value || !vehiculoSel.value?.estado) return ''
+  if (vehiculoSel.value.estado === 'DISPONIBLE') return ''
+  return `El vehículo de esta reserva no está disponible (estado actual: ${vehiculoSel.value.estado}). No se puede generar el contrato hasta que vuelva a estar disponible.`
 })
 const precioDia = computed(() => Number(vehiculoSel.value?.categoria?.precio_dia || 0))
 const totalEstimado = computed(() => Math.max(0, dias.value * precioDia.value - descuento.value))
@@ -242,7 +274,14 @@ const paso1Ok = computed(() =>
   !cargandoReservasCliente.value &&
   (esDesdeReserva.value ? !!reservaOrigen.value : (sinReservaDisponible.value || rentaDirectaConfirmada.value || !reservasCliente.value.length)),
 )
-const paso2Ok = computed(() => !!vehiculoId.value && !!fechaEntrega.value && !!fechaDevolucion.value)
+const paso2Ok = computed(() =>
+  !!vehiculoSel.value &&
+  !!fechaEntrega.value &&
+  !!fechaDevolucion.value &&
+  precioDia.value > 0 &&
+  !reservaTraslapada.value &&
+  !mensajeVehiculoReserva.value,
+)
 const puedeGenerar = computed(() => paso1Ok.value && paso2Ok.value && dias.value > 0)
 
 const pasoMaximo = computed(() => {
@@ -290,6 +329,7 @@ function limpiarDatosReserva() {
   reservaOrigen.value = null
   reservaId.value = null
   reservasCliente.value = []
+  reservasVigentesCliente.value = []
   sinReservaDisponible.value = false
   rentaDirectaConfirmada.value = false
   fechaEntrega.value = ''
@@ -331,12 +371,15 @@ async function cargarReservasCliente(clienteSeleccionado) {
   sinReservaDisponible.value = false
   rentaDirectaConfirmada.value = false
   reservasCliente.value = []
+  reservasVigentesCliente.value = []
   reservaOrigen.value = null
   reservaId.value = null
   error.value = ''
 
   try {
-    const list = await reservasStore.fetchReservasActivasCliente(clienteSeleccionado)
+    const vigentes = await reservasStore.fetchReservasVigentesCliente(clienteSeleccionado)
+    const list = vigentes.filter((r) => r.estado === 'PENDIENTE' && !r.contrato)
+    reservasVigentesCliente.value = vigentes
     reservasCliente.value = list
 
     if (!list.length) {
@@ -387,23 +430,25 @@ async function consultarVehiculos() {
   if (!reservaId.value) vehiculoId.value = ''
   try {
     if (reservaId.value) {
-      vehiculos.value = await reservasStore.fetchVehiculosDisponibles(
+      // Laravel (ContratoController::store) siempre usa el vehículo de la
+      // reserva e ignora cualquier otro vehiculo_id. Por eso aquí solo se
+      // muestra ese vehículo: así el nombre y la tarifa que ve el usuario son
+      // los mismos que quedarán guardados en el contrato.
+      const disponibles = await reservasStore.fetchVehiculosDisponibles(
         fechaEntrega.value,
         fechaDevolucion.value,
-        reservaId.value || undefined,
+        reservaId.value,
       )
+      const reservado = disponibles.find((v) => Number(v.id) === Number(vehiculoReservado))
+        || reservaOrigen.value?.vehiculo
+        || null
+      vehiculos.value = reservado ? [reservado] : []
+      vehiculoId.value = vehiculoReservado
     } else {
       vehiculos.value = await reservasStore.fetchVehiculosDisponibles(
         fechaEntrega.value,
         fechaDevolucion.value,
       )
-    }
-    if (reservaId.value && vehiculoReservado) {
-      const yaIncluido = vehiculos.value.some((v) => v.id === vehiculoReservado)
-      if (!yaIncluido && reservaOrigen.value?.vehiculo) {
-        vehiculos.value = [reservaOrigen.value.vehiculo, ...vehiculos.value]
-      }
-      vehiculoId.value = vehiculoReservado
     }
     vehiculosConsultados.value = true
   } catch (e) {
@@ -467,6 +512,14 @@ async function generarContrato() {
     error.value = mensajeContratoActivo.value
     return
   }
+  if (reservaTraslapada.value) {
+    error.value = mensajeReservaTraslapada.value
+    return
+  }
+  if (mensajeVehiculoReserva.value) {
+    error.value = mensajeVehiculoReserva.value
+    return
+  }
   generando.value = true
   error.value = ''
   try {
@@ -479,9 +532,11 @@ async function generarContrato() {
       observaciones_entrega:     observacionesEntrega.value,
     }
     if (reservaId.value) {
+      // ContratoController::store rechaza el contrato si estas fechas no son
+      // idénticas a las de la reserva, que se guardan sin hora (00:00).
       payload.reserva_id = reservaId.value
-      payload.fecha_hora_entrega = `${fechaEntrega.value} ${horaEntrega.value}:00`
-      payload.fecha_hora_devolucion = `${fechaDevolucion.value} ${horaDevolucion.value}:00`
+      payload.fecha_hora_entrega = `${fechaSolo(reservaOrigen.value?.fecha_inicio) || fechaEntrega.value} 00:00:00`
+      payload.fecha_hora_devolucion = `${fechaSolo(reservaOrigen.value?.fecha_fin) || fechaDevolucion.value} 00:00:00`
     } else {
       payload.dias_acordados = dias.value
     }
@@ -642,6 +697,22 @@ function cerrarPreviewContrato() {
 }
 .wizard-btn--primary:hover:not(:disabled) { opacity: 0.92; transform: translateY(-1px); }
 .wizard-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+/* Teléfonos: el asistente ocupa todo el ancho y el stepper no desborda. */
+@media (max-width: 639px) {
+  .wizard-body { padding: 0 0 1.5rem; gap: 1rem; }
+  .wizard-header { gap: 0.6rem; padding-top: 0.5rem; flex-wrap: wrap; }
+  .wizard-title { font-size: 1.2rem; }
+  .wizard-stepper { padding-bottom: 0.75rem; }
+  .wizard-step { min-width: 0; padding: 0.6rem 0.35rem; gap: 0.35rem; justify-content: center; }
+  .wizard-step-label { font-size: 0.65rem; }
+  .wizard-step:not(.wizard-step--active) .wizard-step-label { display: none; }
+  .wizard-panel :deep(.form-section) { padding: 1rem; }
+  .wizard-nav { position: sticky; bottom: 0; z-index: 5; padding: 0.75rem 0; margin-top: 0.75rem; }
+  .wizard-root--light .wizard-nav { background: #f9fafb; }
+  .wizard-root--dark .wizard-nav { background: #0b0f19; }
+  .wizard-btn { flex: 1; justify-content: center; padding: 0.75rem 0.9rem; }
+}
 
 .slide-fade-enter-active, .slide-fade-leave-active { transition: all 0.25s ease; }
 .slide-fade-enter-from { opacity: 0; transform: translateX(16px); }

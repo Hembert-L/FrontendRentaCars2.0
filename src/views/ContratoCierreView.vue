@@ -123,12 +123,15 @@
               <i class="pi pi-clock"></i>
               <div class="flex-1">
                 <p class="cierre-status-title">{{ horasRetraso }} hora(s) de retraso</p>
-                <label class="cierre-check">
+                <p v-if="yaTieneCargoRetraso" class="cierre-helper mt-2 mb-0">
+                  El cargo por retraso ya está registrado en este contrato.
+                </p>
+                <label v-else class="cierre-check">
                   <input v-model="aplicarCargoRetraso" :disabled="operacionEnCurso" type="checkbox" />
                   <span>Aplicar cargo por retraso al cierre</span>
                 </label>
                 <input
-                  v-if="aplicarCargoRetraso"
+                  v-if="aplicarCargoRetraso && !yaTieneCargoRetraso"
                   v-model.number="montoRetraso"
                   :disabled="operacionEnCurso"
                   type="number"
@@ -136,6 +139,13 @@
                   step="0.01"
                   class="cierre-input cierre-input--sm cierre-input--amount mt-2"
                 />
+                <p v-if="aplicarCargoRetraso && !yaTieneCargoRetraso && !cerrarConDeuda" class="cierre-helper mt-2 mb-0">
+                  Al cerrar, Laravel registra este cargo y deja el contrato con saldo pendiente: habrá que cobrarlo
+                  y volver a cerrar.
+                </p>
+                <p v-if="aplicarCargoRetraso && !yaTieneCargoRetraso && cerrarConDeuda" class="cierre-helper mt-2 mb-0">
+                  En un cierre con deuda Laravel no registra el cargo por retraso.
+                </p>
               </div>
             </div>
             <div v-else class="cierre-status cierre-status--ok">
@@ -167,10 +177,35 @@
               <span>Cargos registrados</span>
               <strong>${{ formatPrecio(totalCargosRegistrados) }}</strong>
             </div>
-            <div v-for="cargo in cargosRegistrados" :key="cargo.id || `${cargo.tipo_cargo}-${cargo.concepto}`" class="cierre-registered-row">
+            <div v-for="cargo in cargosRegistrados" :key="cargo.id || `${cargo.tipo_cargo}-${cargo.concepto}`" class="cierre-registered-row cierre-registered-row--acciones">
               <span>{{ labelTipoCargo(cargo.tipo_cargo) }}</span>
-              <p>{{ cargo.concepto }}</p>
+              <p>
+                {{ cargo.concepto }}
+                <em v-if="cargo.estado_cargo === 'PAGADO'" class="cierre-registered-tag">Pagado</em>
+              </p>
               <strong>${{ formatPrecio(cargo.monto) }}</strong>
+              <div class="cierre-registered-actions">
+                <button
+                  v-if="cargo.id && cargo.estado_cargo !== 'PAGADO'"
+                  type="button"
+                  class="cierre-icon-btn"
+                  title="Editar cargo"
+                  :disabled="operacionEnCurso || Boolean(errorRecarga)"
+                  @click="editarCargoRegistrado(cargo)"
+                >
+                  <i class="pi pi-pencil"></i>
+                </button>
+                <button
+                  v-if="cargo.id && cargo.estado_cargo !== 'PAGADO'"
+                  type="button"
+                  class="cierre-icon-btn cierre-icon-btn--danger"
+                  title="Eliminar cargo"
+                  :disabled="operacionEnCurso || Boolean(errorRecarga)"
+                  @click="eliminarCargoRegistrado(cargo)"
+                >
+                  <i class="pi pi-trash"></i>
+                </button>
+              </div>
             </div>
           </div>
           <div v-if="!cargosRegistrados.length && !cargos.length" class="cierre-empty-cargos">Sin cargos adicionales</div>
@@ -181,10 +216,8 @@
               class="cierre-input cierre-input--sm cierre-input--type"
             >
               <option value="" disabled>Selecciona tipo</option>
-              <option value="COMBUSTIBLE">Combustible</option>
-              <option value="DANIO">Daño</option>
-              <option value="DIA EXTRA">Día extra</option>
-              <option value="OTRO">Otro</option>
+              <!-- Los daños se registran como incidencias (Laravel no acepta el tipo DANIO en cargos). -->
+              <option v-for="tipo in TIPOS_CARGO_EDITABLES" :key="tipo.value" :value="tipo.value">{{ tipo.label }}</option>
             </select>
             <input
               v-model="cargo.concepto"
@@ -241,12 +274,42 @@
               <span>Incidencias registradas</span>
               <strong>${{ formatPrecio(totalIncidenciasClienteRegistradas) }}</strong>
             </div>
-            <div v-for="incidencia in incidenciasRegistradas" :key="incidencia.id || `${incidencia.tipo_incidencia}-${incidencia.descripcion}`" class="cierre-registered-row cierre-registered-row--incidencia">
+            <div v-for="incidencia in incidenciasRegistradas" :key="incidencia.id || `${incidencia.tipo_incidencia}-${incidencia.descripcion}`" class="cierre-registered-row cierre-registered-row--incidencia cierre-registered-row--acciones">
               <span>{{ labelTipoIncidencia(incidencia.tipo_incidencia) }}</span>
-              <p>{{ incidencia.descripcion || 'Sin descripción' }}</p>
+              <p>
+                {{ incidencia.descripcion || 'Sin descripción' }}
+                <em class="cierre-registered-tag">{{ labelEstadoIncidencia(incidencia.estado_incidencia) }}</em>
+              </p>
               <strong>{{ incidencia.responsable_tipo === 'CLIENTE' ? `$${formatPrecio(incidencia.costo)}` : labelResponsableIncidencia(incidencia.responsable_tipo) }}</strong>
+              <div class="cierre-registered-actions">
+                <button
+                  v-if="incidencia.id"
+                  type="button"
+                  class="cierre-icon-btn"
+                  title="Corregir incidencia"
+                  :disabled="operacionEnCurso || Boolean(errorRecarga)"
+                  @click="editarIncidenciaRegistrada(incidencia)"
+                >
+                  <i class="pi pi-pencil"></i>
+                </button>
+                <button
+                  v-if="incidencia.id && authStore.isAdmin"
+                  type="button"
+                  class="cierre-icon-btn cierre-icon-btn--danger"
+                  title="Anular incidencia"
+                  :disabled="operacionEnCurso || Boolean(errorRecarga)"
+                  @click="anularIncidenciaRegistrada(incidencia)"
+                >
+                  <i class="pi pi-ban"></i>
+                </button>
+              </div>
             </div>
           </div>
+          <p v-if="hayDanioMecanicoPorRegistrar" class="cierre-warning">
+            <i class="pi pi-exclamation-triangle"></i>
+            Al guardar un daño mecánico, el vehículo pasa a estado <strong>EN PROCESO</strong>. Ojo: al cerrar la
+            renta, el sistema lo vuelve a marcar DISPONIBLE; registra su mantenimiento antes de volver a rentarlo.
+          </p>
           <div v-if="!incidenciasRegistradas.length && !incidencias.length" class="cierre-empty-cargos">Sin incidencias registradas</div>
           <div v-for="(incidencia, i) in incidencias" :key="i" class="cierre-incidencia-row">
             <select
@@ -314,36 +377,77 @@
           </div>
         </div>
         <div class="cierre-ticket-line"></div>
+        <!--
+          monto_total_renta ya incluye los cargos registrados y las incidencias
+          cobradas al cliente (Laravel los suma al guardarlos). Por eso se
+          muestran como desglose del total, no como montos adicionales.
+        -->
         <div class="cierre-ticket-rows">
           <div class="cierre-ticket-row">
-            <span>Total contrato</span>
-            <strong>${{ formatPrecio(contrato.monto_total_renta) }}</strong>
+            <span>Renta acordada</span>
+            <strong>${{ formatPrecio(rentaBase) }}</strong>
           </div>
-          <div class="cierre-ticket-row">
+          <div v-if="totalCargosRegistrados > 0" class="cierre-ticket-row cierre-ticket-row--sub">
             <span>Cargos registrados</span>
-            <strong class="cierre-ticket-gold">+${{ formatPrecio(totalCargosRegistrados) }}</strong>
+            <strong>+${{ formatPrecio(totalCargosRegistrados) }}</strong>
           </div>
-          <div v-if="totalExtras > 0" class="cierre-ticket-row">
-            <span>Cargos por registrar</span>
-            <strong class="cierre-ticket-gold">+${{ formatPrecio(totalExtras) }}</strong>
+          <div v-if="totalIncidenciasClienteRegistradas > 0" class="cierre-ticket-row cierre-ticket-row--sub">
+            <span>Incidencias del cliente</span>
+            <strong>+${{ formatPrecio(totalIncidenciasClienteRegistradas) }}</strong>
           </div>
-          <div v-if="totalIncidenciasClientePorRegistrar > 0" class="cierre-ticket-row">
-            <span>Incidencias por registrar</span>
-            <strong class="cierre-ticket-gold">+${{ formatPrecio(totalIncidenciasClientePorRegistrar) }}</strong>
+          <div v-if="Math.abs(ajusteContrato) >= 0.01" class="cierre-ticket-row cierre-ticket-row--sub">
+            <span>Otros ajustes</span>
+            <strong>{{ ajusteContrato > 0 ? "+" : "-" }}${{ formatPrecio(Math.abs(ajusteContrato)) }}</strong>
           </div>
-          <div v-if="aplicarCargoRetraso" class="cierre-ticket-row">
-            <span>Cargo por retraso</span>
-            <strong class="cierre-ticket-gold">+${{ formatPrecio(montoRetraso) }}</strong>
+          <div class="cierre-ticket-row cierre-ticket-row--total">
+            <span>Total del contrato</span>
+            <strong>${{ formatPrecio(contrato.monto_total_renta) }}</strong>
           </div>
           <div v-if="pagadoContrato > 0" class="cierre-ticket-row">
             <span>Ya pagado</span>
             <strong>-${{ formatPrecio(pagadoContrato) }}</strong>
           </div>
+          <div class="cierre-ticket-row cierre-ticket-row--total">
+            <span>Saldo actual</span>
+            <strong>${{ formatPrecio(saldoActual) }}</strong>
+          </div>
+          <template v-if="totalPrevisto > 0">
+            <p class="cierre-ticket-caption">Aún no registrado</p>
+            <div v-if="totalExtras > 0" class="cierre-ticket-row">
+              <span>Cargos por guardar</span>
+              <strong class="cierre-ticket-gold">+${{ formatPrecio(totalExtras) }}</strong>
+            </div>
+            <div v-if="totalIncidenciasClientePorRegistrar > 0" class="cierre-ticket-row">
+              <span>Incidencias por guardar</span>
+              <strong class="cierre-ticket-gold">+${{ formatPrecio(totalIncidenciasClientePorRegistrar) }}</strong>
+            </div>
+            <div v-if="montoRetrasoPrevisto > 0" class="cierre-ticket-row">
+              <span>Cargo por retraso ({{ horasRetraso }} h)</span>
+              <strong class="cierre-ticket-gold">+${{ formatPrecio(montoRetrasoPrevisto) }}</strong>
+            </div>
+          </template>
         </div>
         <div class="cierre-ticket-total">
-          <span>{{ saldoPendiente > 0 ? "Saldo pendiente" : "Estado de pago" }}</span>
+          <span>{{ saldoPendiente > 0 ? (totalPrevisto > 0 ? "Saldo previsto" : "Saldo pendiente") : "Estado de pago" }}</span>
           <p>{{ saldoPendiente > 0 ? `$${formatPrecio(saldoPendiente)}` : labelPagoContrato }}</p>
         </div>
+
+        <div v-if="puedeOfrecerCierreConDeuda" class="cierre-deuda">
+          <label class="cierre-check">
+            <input v-model="cerrarConDeuda" :disabled="operacionEnCurso" type="checkbox" />
+            <span>Cerrar con deuda pendiente (${{ formatPrecio(saldoActual) }})</span>
+          </label>
+          <textarea
+            v-if="cerrarConDeuda"
+            v-model.trim="motivoCierreDeuda"
+            :disabled="operacionEnCurso"
+            rows="2"
+            maxlength="500"
+            class="cierre-input cierre-input--sm mt-2"
+            placeholder="Motivo (obligatorio): p. ej. el cliente pagará el saldo la próxima semana"
+          ></textarea>
+        </div>
+
         <p v-if="mensajeBloqueoCierre" class="cierre-ticket-note">{{ mensajeBloqueoCierre }}</p>
         <div class="cierre-ticket-actions">
           <button
@@ -362,7 +466,7 @@
             @click="cerrarRenta"
           >
             <i :class="cerrando ? 'pi pi-spin pi-spinner' : 'pi pi-flag'"></i>
-            Cerrar renta y liberar vehículo
+            {{ cerrarConDeuda ? "Cerrar con deuda y liberar vehículo" : "Cerrar renta y liberar vehículo" }}
           </button>
         </div>
         <div class="cierre-ticket-perf cierre-ticket-perf--flip"></div>
@@ -372,10 +476,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from "vue";
+import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import { useContratosStore } from "@/stores/contratos";
+import { useAuthStore } from "@/stores/auth";
 import api from "@/services/api";
 import { useAppTheme } from "@/composables/useAppTheme";
 import { toastSuccess } from "@/utils/toast";
@@ -394,6 +499,7 @@ const route = useRoute();
 const router = useRouter();
 const { isDark } = useAppTheme();
 const store = useContratosStore();
+const authStore = useAuthStore();
 
 const contrato = ref(null);
 const cargando = ref(true);
@@ -416,6 +522,19 @@ const incidencias = ref([]);
 const incidenciasRegistradas = ref([]);
 const aplicarCargoRetraso = ref(false);
 const montoRetraso = ref(15);
+const cerrarConDeuda = ref(false);
+const motivoCierreDeuda = ref("");
+// Reloj para que las horas de retraso (y el saldo previsto) se actualicen
+// mientras la pantalla está abierta; antes quedaban fijas al cargar.
+const ahora = ref(Date.now());
+let relojRetraso = null;
+
+// Tipos válidos en CargoAdicionalTipoEnum (RETRASO lo genera el cierre).
+const TIPOS_CARGO_EDITABLES = [
+  { value: "COMBUSTIBLE", label: "Combustible" },
+  { value: "DIA EXTRA", label: "Día extra" },
+  { value: "OTRO", label: "Otro" },
+];
 
 const combIdx = computed(() => {
   const i = NIVELES_COMBUSTIBLE.findIndex((n) => n.value === normalizarNivelCombustible(nivelRecepcion.value));
@@ -431,14 +550,16 @@ const pctEntrega = computed(() => nivelCombustiblePct(contrato.value?.nivel_comb
 const pctRecepcion = computed(() => nivelCombustiblePct(nivelRecepcion.value));
 const alertaCombustible = computed(() => pctRecepcion.value < pctEntrega.value);
 
+// Igual que CierreRentaController: 2 h de margen y horas completas (diffInHours).
 const horasRetraso = computed(() => {
   if (!contrato.value?.fecha_hora_devolucion) return 0;
-  const devolucion = new Date(contrato.value.fecha_hora_devolucion);
-  const limite = new Date(devolucion.getTime() + 2 * 3600000);
-  const ahora = new Date();
-  if (ahora <= limite) return 0;
-  return Math.max(0, Math.ceil((ahora - devolucion) / 3600000));
+  const devolucion = new Date(contrato.value.fecha_hora_devolucion).getTime();
+  if (!Number.isFinite(devolucion)) return 0;
+  const limite = devolucion + 2 * 3600000;
+  if (ahora.value <= limite) return 0;
+  return Math.max(0, Math.floor((ahora.value - devolucion) / 3600000));
 });
+const yaTieneCargoRetraso = computed(() => cargosRegistrados.value.some((c) => c.tipo_cargo === "RETRASO"));
 
 const totalExtras = computed(() => cargosValidos().reduce((s, c) => s + Number(c.monto || 0), 0));
 const tieneCargosSinGuardar = computed(() => cargos.value.length > 0);
@@ -455,13 +576,45 @@ const totalIncidenciasClienteRegistradas = computed(() =>
     .reduce((s, i) => s + Number(i.costo || 0), 0),
 );
 const pagadoContrato = computed(() => montoPagadoContrato(contrato.value));
-const saldoPendiente = computed(() => {
+// Renta pactada sin cargos ni incidencias (misma fórmula que usa Laravel).
+const rentaBase = computed(() => {
   if (!contrato.value) return 0;
-  const saldoBase = Math.max(0, Number(contrato.value.monto_total_renta || 0) - pagadoContrato.value);
-  return saldoBase + totalExtras.value + totalIncidenciasClientePorRegistrar.value;
+  const { dias_acordados: dias, precio_por_dia: precio, monto_descuento: descuento } = contrato.value;
+  if (dias == null || precio == null) return Number(contrato.value.monto_total_renta || 0);
+  return Math.max(0, Number(dias) * Number(precio) - Number(descuento || 0));
 });
+// Diferencia entre lo que Laravel guardó como total y la suma visible; se
+// muestra para que el desglose siempre cuadre con el total real.
+const ajusteContrato = computed(() => {
+  if (!contrato.value) return 0;
+  const suma = rentaBase.value + totalCargosRegistrados.value + totalIncidenciasClienteRegistradas.value;
+  return Math.round((Number(contrato.value.monto_total_renta || 0) - suma) * 100) / 100;
+});
+const saldoActual = computed(() => {
+  if (!contrato.value) return 0;
+  return Math.max(0, Number(contrato.value.monto_total_renta || 0) - pagadoContrato.value);
+});
+const aplicaRetrasoAlCerrar = computed(() =>
+  aplicarCargoRetraso.value && horasRetraso.value > 0 && !yaTieneCargoRetraso.value,
+);
+const montoRetrasoPrevisto = computed(() =>
+  aplicaRetrasoAlCerrar.value && !cerrarConDeuda.value ? Number(montoRetraso.value || 0) : 0,
+);
+const totalPrevisto = computed(() =>
+  totalExtras.value + totalIncidenciasClientePorRegistrar.value + montoRetrasoPrevisto.value,
+);
+const saldoPendiente = computed(() => saldoActual.value + totalPrevisto.value);
 const labelPagoContrato = computed(() =>
   contrato.value?.estado_pago === "PAGADO" ? "Pagado" : "Pendiente",
+);
+const puedeOfrecerCierreConDeuda = computed(() =>
+  contrato.value?.estado_contrato === "ACTIVO" && contrato.value?.estado_pago !== "PAGADO" && saldoActual.value > 0,
+);
+watch(puedeOfrecerCierreConDeuda, (disponible) => {
+  if (!disponible) cerrarConDeuda.value = false;
+});
+const hayDanioMecanicoPorRegistrar = computed(() =>
+  incidencias.value.some((i) => i.tipo_incidencia === "DANIO MECANICO"),
 );
 const mensajeBloqueoCierre = computed(() => {
   if (operacionEnCurso.value) return "Espera a que termine la operación en curso.";
@@ -473,11 +626,13 @@ const mensajeBloqueoCierre = computed(() => {
     return "Hay cargos pendientes de guardar antes del cierre.";
   if (tieneIncidenciasSinGuardar.value)
     return "Hay incidencias pendientes de guardar antes del cierre.";
-  if (saldoPendiente.value > 0)
-    return "Hay saldo pendiente por pagar antes de cerrar la renta.";
-  if (contrato.value.estado_pago !== "PAGADO")
-    return "El contrato debe estar pagado antes de cerrar la renta.";
-  if (aplicarCargoRetraso.value && (!montoRetraso.value || Number(montoRetraso.value) <= 0)) {
+  if (cerrarConDeuda.value) {
+    if (!motivoCierreDeuda.value) return "Escribe el motivo para cerrar con deuda pendiente.";
+    return "";
+  }
+  if (saldoActual.value > 0 || contrato.value.estado_pago !== "PAGADO")
+    return "Hay saldo pendiente: cóbralo o marca \"Cerrar con deuda pendiente\".";
+  if (aplicaRetrasoAlCerrar.value && (!montoRetraso.value || Number(montoRetraso.value) <= 0)) {
     return "Indica un monto válido para el cargo por retraso.";
   }
   return "";
@@ -503,6 +658,7 @@ const infoContrato = computed(() => {
 
 onMounted(async () => {
   window.addEventListener("beforeunload", advertirSalidaNavegador);
+  relojRetraso = setInterval(() => { ahora.value = Date.now(); }, 60_000);
   try {
     contrato.value = await store.fetchContrato(route.params.id);
     nivelRecepcion.value = normalizarNivelCombustible(contrato.value.nivel_combustible_entrega) || "1/2";
@@ -530,6 +686,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("beforeunload", advertirSalidaNavegador);
+  clearInterval(relojRetraso);
 });
 
 onBeforeRouteLeave(async (to) => {
@@ -543,7 +700,7 @@ onBeforeRouteUpdate((to) => to.name === "login" || (!operacionEnCurso.value && c
 
 function cargosDesdeContrato(lista) {
   return (lista || [])
-    .filter((c) => ["PENDIENTE", "APLICADO"].includes(c.estado_cargo))
+    .filter((c) => ["PENDIENTE", "APLICADO", "PAGADO"].includes(c.estado_cargo))
     .map((c) => ({
       id: c.id,
       concepto: c.descripcion || c.concepto || "Cargo adicional",
@@ -588,12 +745,23 @@ async function cargarIncidenciasContrato() {
   incidenciasRegistradas.value = incidenciasDesdeLista(items);
 }
 
+// Las columnas de monto/costo son decimal(8,2): Laravel no limita decimales ni
+// tope, y un valor fuera de rango termina en error 500 en vez de un 422.
+const MONTO_MAXIMO = 999999.99;
+function montoValido(valor, { permitirCero = false } = {}) {
+  const texto = String(valor ?? "").trim();
+  const n = Number(texto);
+  if (texto === "" || !Number.isFinite(n) || n > MONTO_MAXIMO) return false;
+  if (permitirCero ? n < 0 : n <= 0) return false;
+  return /^\d+(\.\d{1,2})?$/.test(texto);
+}
+
 function cargosValidos() {
-  return cargos.value.filter((c) => c.tipo_cargo && c.concepto && Number(c.monto) > 0);
+  return cargos.value.filter((c) => c.tipo_cargo && c.concepto && montoValido(c.monto));
 }
 
 function cargosIncompletos() {
-  return cargos.value.some((c) => !c.tipo_cargo || !c.concepto || !Number(c.monto) || Number(c.monto) <= 0);
+  return cargos.value.some((c) => !c.tipo_cargo || !c.concepto || !montoValido(c.monto));
 }
 
 function agregarCargoNuevo(tipo = "", concepto = "", monto = 0) {
@@ -683,8 +851,8 @@ async function registrarColeccion(tipo, { mostrarExito = false, desdeCobro = fal
       icon: "warning",
       title: esCargo ? "Completa los cargos" : "Completa las incidencias",
       text: esCargo
-        ? "Cada cargo debe tener tipo, concepto y un monto mayor a cero antes de guardarlo."
-        : "Cada incidencia debe tener tipo, responsable, descripción y un costo válido.",
+        ? "Cada cargo debe tener tipo, concepto y un monto mayor a cero (máximo 2 decimales y hasta $999,999.99)."
+        : "Cada incidencia debe tener tipo, responsable, descripción y un costo válido (máximo 2 decimales y hasta $999,999.99).",
       confirmButtonColor: "#922b21",
     });
     return false;
@@ -737,7 +905,7 @@ async function guardarCargosPendientes() {
 
 function incidenciasIncompletas() {
   return incidencias.value.some(
-    (i) => !i.tipo_incidencia || !i.responsable_tipo || !i.descripcion || Number(i.costo || 0) < 0,
+    (i) => !i.tipo_incidencia || !i.responsable_tipo || !i.descripcion || !montoValido(i.costo || 0, { permitirCero: true }),
   );
 }
 
@@ -808,6 +976,178 @@ function labelResponsableIncidencia(responsable) {
   return labels[responsable] || responsable || "Responsable";
 }
 
+function labelEstadoIncidencia(estado) {
+  const labels = {
+    REPORTADA: "Reportada",
+    "EN REVISION": "En revisión",
+    RESUELTA: "Resuelta",
+    ANULADA: "Anulada",
+  };
+  return labels[estado] || estado || "Reportada";
+}
+
+function escaparHtml(valor) {
+  return String(valor ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function opcionesHtml(opciones, seleccionado) {
+  return opciones
+    .map(({ value, label }) =>
+      `<option value="${escaparHtml(value)}"${value === seleccionado ? " selected" : ""}>${escaparHtml(label)}</option>`)
+    .join("");
+}
+
+const estiloCampoSwal = "width:100%;margin:0 0 .75rem;padding:.55rem .7rem;border:1px solid #d1d5db;border-radius:.5rem;font-size:.9rem;";
+const estiloEtiquetaSwal = "display:block;text-align:left;font-size:.75rem;font-weight:700;margin-bottom:.25rem;color:#4b5563;";
+
+// Ejecuta una corrección sobre un registro ya guardado y recarga el contrato
+// (Laravel recalcula el total y el estado de pago).
+async function ejecutarCorreccion(accion, mensajeExito) {
+  if (operacionEnCurso.value || errorRecarga.value) return;
+  guardandoCargos.value = true;
+  resultadoGuardado.value = "";
+  try {
+    await accion();
+    toastSuccess(mensajeExito);
+  } catch (e) {
+    await Swal.fire({ icon: "error", title: "No se pudo guardar", text: mensajeErrorOriginal(e), confirmButtonColor: "#922b21" });
+  } finally {
+    guardandoCargos.value = false;
+  }
+  await recargarDatosContrato();
+}
+
+async function editarCargoRegistrado(cargo) {
+  const tipos = cargo.tipo_cargo === "RETRASO"
+    ? [{ value: "RETRASO", label: "Retraso" }, ...TIPOS_CARGO_EDITABLES]
+    : TIPOS_CARGO_EDITABLES;
+  const { value: datos } = await Swal.fire({
+    title: "Editar cargo",
+    html: `
+      <label style="${estiloEtiquetaSwal}">Tipo</label>
+      <select id="swal-cargo-tipo" style="${estiloCampoSwal}">${opcionesHtml(tipos, cargo.tipo_cargo)}</select>
+      <label style="${estiloEtiquetaSwal}">Concepto</label>
+      <input id="swal-cargo-concepto" style="${estiloCampoSwal}" maxlength="255" value="${escaparHtml(cargo.concepto)}" />
+      <label style="${estiloEtiquetaSwal}">Monto ($)</label>
+      <input id="swal-cargo-monto" type="number" min="0.01" step="0.01" style="${estiloCampoSwal}" value="${escaparHtml(cargo.monto)}" />`,
+    focusConfirm: false,
+    showCancelButton: true,
+    confirmButtonText: "Guardar cambios",
+    cancelButtonText: "Cancelar",
+    confirmButtonColor: "#922b21",
+    preConfirm: () => {
+      const tipo = document.getElementById("swal-cargo-tipo").value;
+      const concepto = document.getElementById("swal-cargo-concepto").value.trim();
+      const montoTexto = document.getElementById("swal-cargo-monto").value;
+      if (!concepto) return Swal.showValidationMessage("Escribe el concepto del cargo.");
+      if (!montoValido(montoTexto)) return Swal.showValidationMessage("El monto debe ser mayor a cero, con máximo 2 decimales y hasta $999,999.99.");
+      return { tipo_cargo: tipo, descripcion: concepto, monto: Number(montoTexto) };
+    },
+  });
+  if (!datos) return;
+  await ejecutarCorreccion(() => store.actualizarCargo(cargo.id, datos), "Cargo actualizado");
+}
+
+async function eliminarCargoRegistrado(cargo) {
+  const { isConfirmed } = await Swal.fire({
+    icon: "warning",
+    title: "¿Eliminar este cargo?",
+    text: `${labelTipoCargo(cargo.tipo_cargo)}: ${cargo.concepto} ($${formatPrecio(cargo.monto)}). El total del contrato se recalculará.`,
+    showCancelButton: true,
+    confirmButtonText: "Eliminar",
+    cancelButtonText: "Cancelar",
+    confirmButtonColor: "#922b21",
+    cancelButtonColor: "#6b7280",
+  });
+  if (!isConfirmed) return;
+  await ejecutarCorreccion(() => store.eliminarCargo(cargo.id), "Cargo eliminado");
+}
+
+async function editarIncidenciaRegistrada(incidencia) {
+  const tipos = [
+    { value: "DANIO ESTETICO", label: "Daño estético" },
+    { value: "DANIO MECANICO", label: "Daño mecánico" },
+  ];
+  const responsables = [
+    { value: "CLIENTE", label: "Cliente" },
+    { value: "NEGOCIO", label: "Negocio" },
+    { value: "TERCERO", label: "Tercero" },
+    { value: "NO DETERMINADO", label: "No determinado" },
+  ];
+  const estados = [
+    { value: "REPORTADA", label: "Reportada" },
+    { value: "EN REVISION", label: "En revisión" },
+    { value: "RESUELTA", label: "Resuelta" },
+  ];
+  const { value: datos } = await Swal.fire({
+    title: "Corregir incidencia",
+    html: `
+      <label style="${estiloEtiquetaSwal}">Tipo</label>
+      <select id="swal-inc-tipo" style="${estiloCampoSwal}">${opcionesHtml(tipos, incidencia.tipo_incidencia)}</select>
+      <label style="${estiloEtiquetaSwal}">Responsable</label>
+      <select id="swal-inc-resp" style="${estiloCampoSwal}">${opcionesHtml(responsables, incidencia.responsable_tipo)}</select>
+      <label style="${estiloEtiquetaSwal}">Estado</label>
+      <select id="swal-inc-estado" style="${estiloCampoSwal}">${opcionesHtml(estados, incidencia.estado_incidencia)}</select>
+      <label style="${estiloEtiquetaSwal}">Descripción</label>
+      <textarea id="swal-inc-desc" rows="3" maxlength="500" style="${estiloCampoSwal}">${escaparHtml(incidencia.descripcion)}</textarea>
+      <label style="${estiloEtiquetaSwal}">Costo ($) — solo se cobra si el responsable es el cliente</label>
+      <input id="swal-inc-costo" type="number" min="0" step="0.01" style="${estiloCampoSwal}" value="${escaparHtml(incidencia.costo)}" />`,
+    focusConfirm: false,
+    showCancelButton: true,
+    confirmButtonText: "Guardar cambios",
+    cancelButtonText: "Cancelar",
+    confirmButtonColor: "#922b21",
+    preConfirm: () => {
+      const descripcion = document.getElementById("swal-inc-desc").value.trim();
+      const costoTexto = document.getElementById("swal-inc-costo").value || "0";
+      const costo = Number(costoTexto);
+      if (!descripcion) return Swal.showValidationMessage("Escribe la descripción de la incidencia.");
+      if (!montoValido(costoTexto, { permitirCero: true })) return Swal.showValidationMessage("El costo debe ser 0 o más, con máximo 2 decimales y hasta $999,999.99.");
+      return {
+        tipo_incidencia: document.getElementById("swal-inc-tipo").value,
+        responsable_tipo: document.getElementById("swal-inc-resp").value,
+        estado_incidencia: document.getElementById("swal-inc-estado").value,
+        descripcion,
+        costo,
+      };
+    },
+  });
+  if (!datos) return;
+  if (datos.tipo_incidencia === "DANIO MECANICO" && incidencia.tipo_incidencia !== "DANIO MECANICO") {
+    // Laravel solo cambia el estado del vehículo al registrar, no al editar.
+    await Swal.fire({
+      icon: "info",
+      title: "Revisa el estado del vehículo",
+      text: "Cambiar la incidencia a daño mecánico no pone el vehículo EN PROCESO automáticamente. Si necesita reparación, regístralo en Mantenimiento.",
+      confirmButtonColor: "#922b21",
+    });
+  }
+  await ejecutarCorreccion(() => store.actualizarIncidencia(incidencia.id, datos), "Incidencia corregida");
+}
+
+async function anularIncidenciaRegistrada(incidencia) {
+  const cobro = incidencia.responsable_tipo === "CLIENTE" && Number(incidencia.costo) > 0
+    ? ` Se restarán $${formatPrecio(incidencia.costo)} del total del contrato.`
+    : "";
+  const { isConfirmed } = await Swal.fire({
+    icon: "warning",
+    title: "¿Anular esta incidencia?",
+    text: `${labelTipoIncidencia(incidencia.tipo_incidencia)}: ${incidencia.descripcion}.${cobro} Esta acción no se puede deshacer.`,
+    showCancelButton: true,
+    confirmButtonText: "Anular",
+    cancelButtonText: "Cancelar",
+    confirmButtonColor: "#922b21",
+    cancelButtonColor: "#6b7280",
+  });
+  if (!isConfirmed) return;
+  await ejecutarCorreccion(() => store.anularIncidencia(incidencia.id), "Incidencia anulada");
+}
+
 function combustibleCorto(nivel) {
   return nivel.value;
 }
@@ -846,6 +1186,21 @@ async function cerrarRenta() {
     });
     return;
   }
+  const conDeuda = cerrarConDeuda.value;
+  if (conDeuda) {
+    const { isConfirmed } = await Swal.fire({
+      icon: "warning",
+      title: "¿Cerrar con deuda pendiente?",
+      html: `El contrato quedará <strong>finalizado con deuda</strong> de <strong>$${formatPrecio(saldoActual.value)}</strong> y el vehículo se liberará.<br><br><small>Motivo: ${escaparHtml(motivoCierreDeuda.value)}</small>`,
+      showCancelButton: true,
+      confirmButtonText: "Cerrar con deuda",
+      cancelButtonText: "Volver",
+      confirmButtonColor: "#922b21",
+      cancelButtonColor: "#6b7280",
+    });
+    if (!isConfirmed) return;
+  }
+  const conRetraso = aplicaRetrasoAlCerrar.value && !conDeuda;
   cerrando.value = true;
   try {
     const payload = {
@@ -853,20 +1208,35 @@ async function cerrarRenta() {
       nivel_combustible_recepcion: nivelRecepcion.value,
       estado_vehiculo_recepcion: "RECIBIDO",
       observaciones: observacionesRecepcion.value || null,
-      aplicar_cargo_retraso: Boolean(aplicarCargoRetraso.value),
+      aplicar_cargo_retraso: conRetraso,
     };
-    if (aplicarCargoRetraso.value) {
+    if (conRetraso) {
       payload.monto_retraso = Number(montoRetraso.value);
     }
+    if (conDeuda) {
+      payload.forzar_cierre_con_deuda = true;
+      payload.motivo_cierre_deuda = motivoCierreDeuda.value;
+    }
     await store.cerrarRenta(contrato.value.id, payload);
-    toastSuccess("Renta cerrada", "Vehículo liberado.");
+    toastSuccess(conDeuda ? "Renta cerrada con deuda" : "Renta cerrada", "Vehículo liberado.");
     cerrando.value = false;
+    salidaConfirmada.value = true;
     await router.push({ name: "contratos" });
   } catch (e) {
+    const mensaje = mensajeErrorOriginal(e) || store.error || "No se pudo cerrar la renta.";
+    if (conRetraso && e.response?.status === 422 && /cargo por retraso/i.test(e.response?.data?.message || "")) {
+      // Laravel registró el cargo por retraso y detuvo el cierre hasta que se
+      // cobre: se recarga para mostrar el cargo y el nuevo saldo.
+      aplicarCargoRetraso.value = false;
+      cerrando.value = false;
+      await recargarDatosContrato();
+      await Swal.fire({ icon: "info", title: "Cargo por retraso registrado", text: mensaje, confirmButtonColor: "#922b21" });
+      return;
+    }
     Swal.fire({
       icon: "error",
       title: "Error",
-      text: e.response?.data?.message || store.error || "No se pudo cerrar la renta.",
+      text: mensaje,
       confirmButtonColor: "#922b21",
     });
   } finally {
@@ -1430,6 +1800,21 @@ async function cerrarRenta() {
 .cierre-incidencia-row {
   flex-wrap: wrap;
 }
+@media (max-width: 639px) {
+  .cierre-layout,
+  .cierre-header {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .cierre-cargo-row {
+    flex-wrap: wrap;
+  }
+  .cierre-cargo-row .cierre-input:not(.cierre-input--type):not(.cierre-input--amount),
+  .cierre-input--responsable {
+    flex: 1 1 100%;
+    width: auto;
+  }
+}
 .cierre-incidencia-row .cierre-input:not(.cierre-input--type):not(.cierre-input--responsable):not(.cierre-input--amount) {
   flex: 1 1 15rem;
 }
@@ -1439,6 +1824,72 @@ async function cerrarRenta() {
 }
 .cierre-registered-row--incidencia {
   grid-template-columns: minmax(92px, 0.34fr) minmax(0, 1fr) minmax(92px, auto);
+}
+.cierre-registered-row--acciones {
+  grid-template-columns: minmax(92px, 0.34fr) minmax(0, 1fr) auto auto;
+}
+@media (max-width: 639px) {
+  .cierre-registered-row--acciones {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .cierre-registered-row--acciones p {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+.cierre-registered-actions {
+  display: inline-flex;
+  gap: 0.3rem;
+}
+.cierre-registered-tag {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  font-style: normal;
+  font-size: 0.6rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  background: rgba(107, 114, 128, 0.15);
+}
+.cierre-icon-btn {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.45rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  border: 1px solid rgba(37, 99, 235, 0.3);
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+}
+.cierre-icon-btn--danger {
+  border-color: rgba(220, 38, 38, 0.3);
+  background: rgba(220, 38, 38, 0.08);
+  color: #b91c1c;
+}
+.cierre-root--dark .cierre-icon-btn {
+  color: #93c5fd;
+}
+.cierre-root--dark .cierre-icon-btn--danger {
+  color: #fca5a5;
+}
+.cierre-warning {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  margin-top: 0.5rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.65rem;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: #92400e;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+.cierre-root--dark .cierre-warning {
+  color: #fcd34d;
 }
 .cierre-remove-btn {
   width: 2rem;
@@ -1546,6 +1997,43 @@ async function cerrarRenta() {
 }
 .cierre-ticket-gold {
   color: #f0a500 !important;
+}
+.cierre-ticket-row--sub {
+  padding-left: 0.6rem;
+  font-size: 0.74rem;
+  opacity: 0.85;
+}
+.cierre-ticket-row--total {
+  border-top: 1px dashed rgba(240, 165, 0, 0.25);
+  margin-top: 0.25rem;
+  padding-top: 0.5rem;
+  font-weight: 800;
+}
+.cierre-ticket-row--total span {
+  opacity: 0.8;
+}
+.cierre-ticket-caption {
+  margin-top: 0.75rem;
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #f0a500;
+  opacity: 0.8;
+}
+.cierre-deuda {
+  margin: 0 1.25rem 1rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  background: rgba(248, 113, 113, 0.08);
+}
+.cierre-deuda .cierre-check {
+  margin-top: 0;
+  align-items: flex-start;
+}
+.cierre-deuda .cierre-input {
+  width: 100%;
 }
 .cierre-ticket-total {
   text-align: center;

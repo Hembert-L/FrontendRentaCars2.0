@@ -40,6 +40,36 @@ export const useVehiculosStore = defineStore('vehiculos', () => {
   }
   let catalogosPromesa = null
 
+  // Lista completa (todas las páginas) de vehículos, usada solo para calcular
+  // contadores por marca/categoría/propietario. La lista `vehiculos` de arriba
+  // es la paginada que alimenta la tabla y NO debe usarse para contar, porque
+  // solo contiene la página actual.
+  const todosVehiculos = ref([])
+  const todosVehiculosCargados = ref(false)
+  let todosVehiculosPromesa = null
+
+  async function fetchTodosVehiculos(force = false) {
+    if (!force && todosVehiculosCargados.value) return todosVehiculos.value
+    if (todosVehiculosPromesa && !force) return todosVehiculosPromesa
+    todosVehiculosPromesa = (async () => {
+      try {
+        const { items } = await fetchAllPaginated((params) => api.get('/admin/vehiculos', { params }))
+        todosVehiculos.value = items
+        todosVehiculosCargados.value = true
+        return items
+      } catch {
+        return todosVehiculos.value
+      } finally {
+        todosVehiculosPromesa = null
+      }
+    })()
+    return todosVehiculosPromesa
+  }
+
+  function invalidarTodosVehiculos() {
+    todosVehiculosCargados.value = false
+  }
+
   function normalizePagination(payload) {
     if (!payload || typeof payload !== 'object' || !Array.isArray(payload.data)) {
       return {
@@ -90,8 +120,8 @@ export const useVehiculosStore = defineStore('vehiculos', () => {
     catalogosPromesa = (async () => {
       try {
         const [marcasRes, catsRes, propsRes] = await Promise.allSettled([
-          api.get('/marcas'),
-          api.get('/categorias'),
+          api.get('/admin/marcas'),
+          api.get('/admin/categorias'),
           fetchAllPaginated((params) => api.get('/admin/propietarios', { params })),
         ])
         marcas.value = marcasRes.status === 'fulfilled' ? extraerListaApi(marcasRes.value.data?.data) : []
@@ -117,7 +147,7 @@ export const useVehiculosStore = defineStore('vehiculos', () => {
       return modelosPorMarca.value[key]
     }
     try {
-      const res = await api.get(`/marcas/${marcaId}/modelos`)
+      const res = await api.get(`/admin/marcas/${marcaId}/modelos`)
       const lista = extraerListaApi(res.data?.data)
       modelosPorMarca.value[key] = lista
       return lista
@@ -202,9 +232,12 @@ export const useVehiculosStore = defineStore('vehiculos', () => {
     propietarios,
     modelosPorMarca,
     catalogosCargando,
+    todosVehiculos,
     fetchVehiculos,
     fetchCatalogos,
     fetchModelos,
+    fetchTodosVehiculos,
+    invalidarTodosVehiculos,
     invalidarCatalogos,
     crear,
     actualizar,

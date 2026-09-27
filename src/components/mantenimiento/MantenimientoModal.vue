@@ -210,6 +210,7 @@
               <input
                 v-model="form.lugar"
                 type="text"
+                maxlength="150"
                 class="field-input w-full"
                 :class="errors.lugar ? 'error' : ''"
                 placeholder="Taller, sucursal o lugar del servicio"
@@ -222,9 +223,12 @@
               <textarea
                 v-model="form.descripcion"
                 rows="3"
+                maxlength="250"
                 class="field-input w-full resize-none"
+                :class="errors.descripcion ? 'error' : ''"
                 placeholder="Detalle del trabajo realizado o requerido..."
               ></textarea>
+              <p v-if="errors.descripcion" class="field-error">{{ errors.descripcion }}</p>
             </div>
 
             <div class="flex gap-3 pt-2">
@@ -453,8 +457,18 @@ function validar() {
     String(vehiculoSeleccionado.value?.id) !== String(form.value.vehiculo_id) ||
     !["DISPONIBLE", "EN PROCESO"].includes(vehiculoSeleccionado.value?.estado)
   )) errors.value.vehiculo_id = "Selecciona un vehículo disponible o en proceso";
-  if (form.value.costo === "" || Number(form.value.costo) < 0)
+  // Mismas reglas que StoreMantenimientoRequest: 0 a 999999.99, máximo 2 decimales.
+  const costoTexto = String(form.value.costo ?? "").trim();
+  if (costoTexto === "" || !Number.isFinite(Number(costoTexto)) || Number(costoTexto) < 0)
     errors.value.costo = "Ingresa un costo válido";
+  else if (Number(costoTexto) > 999999.99)
+    errors.value.costo = "El costo no puede superar $999,999.99";
+  else if (!/^\d+(\.\d{1,2})?$/.test(costoTexto))
+    errors.value.costo = "Usa como máximo 2 decimales";
+  if ((form.value.descripcion || "").trim().length > 250)
+    errors.value.descripcion = "Máximo 250 caracteres";
+  if ((form.value.lugar || "").trim().length > 150)
+    errors.value.lugar = "Máximo 150 caracteres";
   if (!form.value.lugar?.trim()) errors.value.lugar = "Requerido";
   return Object.keys(errors.value).length === 0;
 }

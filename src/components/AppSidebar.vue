@@ -3,6 +3,7 @@
     :class="[
       'fixed top-0 left-0 h-full z-50 flex flex-col transition-all duration-300 bg-[#a62b1e]',
       collapsed ? 'w-16' : 'w-64',
+      movil && !abierto ? '-translate-x-full' : 'translate-x-0',
     ]"
   >
     <div
@@ -16,6 +17,17 @@
         <span class="text-white font-extrabold text-base tracking-widest uppercase">RentaCar</span>
       </div>
       <button
+        v-if="movil"
+        type="button"
+        class="sidebar-collapse-btn"
+        title="Cerrar menú"
+        aria-label="Cerrar menú"
+        @click="emit('cerrar')"
+      >
+        <i class="pi pi-times text-sm"></i>
+      </button>
+      <button
+        v-else
         type="button"
         class="sidebar-collapse-btn"
         :class="{ 'sidebar-collapse-btn--collapsed': collapsed }"
@@ -167,11 +179,18 @@ const darkSwitch = computed({
   set: (v) => themeStore.setDark(v),
 });
 
-const emit = defineEmits(["collapsed-change"]);
+const props = defineProps({
+  // En pantallas pequeñas la barra es un menú deslizable (siempre expandido).
+  movil: { type: Boolean, default: false },
+  abierto: { type: Boolean, default: false },
+});
+
+const emit = defineEmits(["collapsed-change", "cerrar"]);
 const router = useRouter();
 const route = useRoute();
 
-const collapsed = ref(false);
+const collapsedEscritorio = ref(false);
+const collapsed = computed(() => !props.movil && collapsedEscritorio.value);
 const activeRoute = ref("dashboard");
 
 watch(
@@ -184,13 +203,14 @@ watch(
 );
 
 function toggleCollapse() {
-  collapsed.value = !collapsed.value;
-  emit("collapsed-change", collapsed.value);
+  collapsedEscritorio.value = !collapsedEscritorio.value;
+  emit("collapsed-change", collapsedEscritorio.value);
 }
 
 function navegar(ruta) {
   activeRoute.value = ruta;
   router.push("/" + ruta);
+  if (props.movil) emit("cerrar");
 }
 </script>
 

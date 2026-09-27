@@ -68,6 +68,45 @@ export const useReservasStore = defineStore("reservas", () => {
     }
   }
 
+  /**
+   * Listado sin reservas CANCELADAS con paginación calculada en el frontend.
+   * Laravel no permite excluir canceladas en /admin/reservas; si se ocultaban
+   * después de paginar en el servidor, cada página mostraba menos filas y el
+   * total ("de N reservas") seguía contando las canceladas.
+   */
+  async function fetchReservasSinCanceladas(params = {}, page = 1, perPage = 10) {
+    loading.value = true;
+    error.value = null;
+    try {
+      const filtros = { ...params };
+      delete filtros.page;
+      const { items } = await fetchAllPaginated(
+        (requestParams) => api.get("/admin/reservas", { params: requestParams }),
+        filtros,
+      );
+      const visibles = items.filter((reserva) => reserva.estado !== "CANCELADA");
+      const total = visibles.length;
+      const lastPage = Math.max(1, Math.ceil(total / perPage));
+      const actual = Math.min(Math.max(1, Number(page) || 1), lastPage);
+      const inicio = (actual - 1) * perPage;
+      reservas.value = visibles.slice(inicio, inicio + perPage);
+      pagination.value = {
+        current_page: actual,
+        last_page: lastPage,
+        per_page: perPage,
+        total,
+        from: total ? inicio + 1 : 0,
+        to: inicio + reservas.value.length,
+      };
+    } catch {
+      error.value = "Error al cargar reservas.";
+      reservas.value = [];
+      pagination.value = normalizePagination(null);
+    } finally {
+      loading.value = false;
+    }
+  }
+
   async function crear(form) {
     loading.value = true;
     error.value = null;
@@ -170,7 +209,7 @@ export const useReservasStore = defineStore("reservas", () => {
     }
   }
 
-  async function fetchReservasActivasCliente(cliente) {
+  async function fetchReservasCliente(cliente) {
     const clienteId = typeof cliente === "object" ? cliente?.id : cliente;
     const search = typeof cliente === "object"
       ? (cliente?.dui || cliente?.nombre || clienteId)
@@ -181,10 +220,23 @@ export const useReservasStore = defineStore("reservas", () => {
       { search },
     );
     return items.filter(
-      (reserva) => Number(reserva.cliente_id || reserva.cliente?.id) === Number(clienteId)
-        && reserva.estado === "PENDIENTE"
-        && !reserva.contrato,
+      (reserva) => Number(reserva.cliente_id || reserva.cliente?.id) === Number(clienteId),
     );
+  }
+
+  async function fetchReservasActivasCliente(cliente) {
+    const items = await fetchReservasCliente(cliente);
+    return items.filter((reserva) => reserva.estado === "PENDIENTE" && !reserva.contrato);
+  }
+
+  /**
+   * Reservas PENDIENTE o CONFIRMADA del cliente: son las que Laravel revisa en
+   * ContratoController::storeDirecto para rechazar un contrato directo con
+   * fechas traslapadas.
+   */
+  async function fetchReservasVigentesCliente(cliente) {
+    const items = await fetchReservasCliente(cliente);
+    return items.filter((reserva) => ["PENDIENTE", "CONFIRMADA"].includes(reserva.estado));
   }
 
   async function cancelar(id, motivo) {
@@ -221,12 +273,14 @@ export const useReservasStore = defineStore("reservas", () => {
     pagination,
     total,
     fetchReservas,
+    fetchReservasSinCanceladas,
     fetchReserva,
     crear,
     actualizar,
     fetchVehiculosDisponibles,
     fetchVehiculosDisponiblesParaReserva,
     fetchReservasActivasCliente,
+    fetchReservasVigentesCliente,
     cancelar,
     fetchCancelaciones,
     advertencia,

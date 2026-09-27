@@ -209,7 +209,7 @@ function inputClass(hasError) {
 
 async function cargarMarcas() {
   try {
-    const { items } = await fetchAllPaginated((params) => api.get('/marcas', { params }))
+    const { items } = await fetchAllPaginated((params) => api.get('/admin/marcas', { params }))
     marcas.value = items
   } catch {
     marcas.value = []
@@ -218,7 +218,7 @@ async function cargarMarcas() {
 
 async function cargarCategoriasExistentes() {
   try {
-    const { items } = await fetchAllPaginated((params) => api.get('/categorias', { params }))
+    const { items } = await fetchAllPaginated((params) => api.get('/admin/categorias', { params }))
     categoriasExistentes.value = items
   } catch {
     categoriasExistentes.value = []
@@ -227,7 +227,7 @@ async function cargarCategoriasExistentes() {
 
 async function cargarModelosExistentes() {
   try {
-    const { items } = await fetchAllPaginated((params) => api.get('/modelos', { params }))
+    const { items } = await fetchAllPaginated((params) => api.get('/admin/modelos', { params }))
     modelosExistentes.value = items
   } catch {
     modelosExistentes.value = []
@@ -363,11 +363,11 @@ async function handleGuardar() {
     let res
     const nombre = form.nombre.trim().replace(/\s+/g, ' ')
     if (props.tipo === 'marca') {
-      res = await api.post('/marcas', { nombre })
+      res = await api.post('/admin/marcas', { nombre })
     } else if (props.tipo === 'categoria') {
-      res = await api.post('/categorias', { nombre, precio_dia: Number(form.precio_dia) })
+      res = await api.post('/admin/categorias', { nombre, precio_dia: Number(form.precio_dia) })
     } else if (props.tipo === 'modelo') {
-      res = await api.post('/modelos', { nombre, marca_id: Number(form.marca_id) })
+      res = await api.post('/admin/modelos', { nombre, marca_id: Number(form.marca_id) })
     } else if (props.tipo === 'propietario') {
       const payload = {
         nombre,

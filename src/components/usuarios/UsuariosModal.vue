@@ -103,15 +103,18 @@
               <p v-if="errors.rol" class="field-error mt-1">{{ errors.rol }}</p>
             </div>
 
-            <!-- Contraseña solo al crear -->
-            <div v-if="!modoEdicion">
-              <label class="field-label" :class="isDark ? 'text-gray-400' : 'text-gray-600'">Contraseña temporal</label>
+            <!-- Contraseña: obligatoria al crear, opcional al editar -->
+            <div>
+              <label class="field-label" :class="isDark ? 'text-gray-400' : 'text-gray-600'">
+                {{ modoEdicion ? 'Nueva contraseña (opcional)' : 'Contraseña temporal' }}
+              </label>
               <div class="relative">
                 <i class="pi pi-lock input-icon" :class="isDark ? 'text-gray-500' : 'text-gray-400'"></i>
                 <input
                   v-model="form.password"
                   :type="showPassword ? 'text' : 'password'"
-                  placeholder="Mínimo 8 caracteres"
+                  autocomplete="new-password"
+                  :placeholder="modoEdicion ? 'Déjala vacía para no cambiarla' : 'Mínimo 8 caracteres'"
                   class="field-input pr-10"
                   :class="[errors.password ? 'error' : '', isDark ? 'field-input-dark' : 'field-input-light']"
                 />
@@ -210,7 +213,8 @@ function validar() {
   if (!form.apellido) { errors.apellido = 'Requerido'; ok = false }
   if (!form.correo || !/\S+@\S+\.\S+/.test(form.correo)) { errors.correo = 'Correo inválido'; ok = false }
   if (!esAdminUsuario.value && !form.rol) { errors.rol = 'Selecciona un rol'; ok = false }
-  if (!props.modoEdicion && form.password.length < 8) { errors.password = 'Mínimo 8 caracteres'; ok = false }
+  const cambiaPassword = !props.modoEdicion || form.password.length > 0
+  if (cambiaPassword && form.password.length < 8) { errors.password = 'Mínimo 8 caracteres'; ok = false }
   return ok
 }
 
