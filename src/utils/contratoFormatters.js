@@ -94,15 +94,6 @@ export function calcularDias(fechaEntrega, fechaDevolucion) {
   return Math.max(1, Math.round((d2 - d1) / 86400000))
 }
 
-/**
- * True si una reserva choca con un contrato directo que se entrega en
- * `fechaEntrega` y se devuelve en `fechaDevolucion` (YYYY-MM-DD).
- *
- * Replica ContratoController::storeDirecto: Laravel compara las fechas (sin
- * hora) de la reserva contra "ahora" y "ahora + días", por eso una reserva
- * que termina el mismo día de la entrega no choca, pero una que empieza el
- * día de la devolución sí.
- */
 export function reservaChocaConContratoDirecto(fechaEntrega, fechaDevolucion, reserva) {
   const entrega = fechaSoloISO(fechaEntrega)
   const devolucion = fechaSoloISO(fechaDevolucion)

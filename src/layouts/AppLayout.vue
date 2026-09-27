@@ -45,9 +45,6 @@ import { useNotificacionesStore } from "@/stores/notificaciones";
 import AppSidebar from "@/components/AppSidebar.vue";
 import AppHeader from "@/components/AppHeader.vue";
 
-// Por debajo de este ancho la barra lateral deja de ser fija y pasa a ser un
-// menú deslizable; si no, en un teléfono ocupaba 256px y dejaba el contenido
-// casi sin espacio.
 const MEDIA_ESCRITORIO = "(min-width: 1024px)";
 
 const sidebarCollapsed = ref(false);

@@ -457,7 +457,6 @@ function validar() {
     String(vehiculoSeleccionado.value?.id) !== String(form.value.vehiculo_id) ||
     !["DISPONIBLE", "EN PROCESO"].includes(vehiculoSeleccionado.value?.estado)
   )) errors.value.vehiculo_id = "Selecciona un vehículo disponible o en proceso";
-  // Mismas reglas que StoreMantenimientoRequest: 0 a 999999.99, máximo 2 decimales.
   const costoTexto = String(form.value.costo ?? "").trim();
   if (costoTexto === "" || !Number.isFinite(Number(costoTexto)) || Number(costoTexto) < 0)
     errors.value.costo = "Ingresa un costo válido";

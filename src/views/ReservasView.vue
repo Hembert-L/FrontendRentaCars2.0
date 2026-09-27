@@ -323,8 +323,6 @@ function reservasParams(page = pagination.value.current_page || 1) {
 }
 
 function pedirReservas(page) {
-  // Sin filtro de estado, el servidor devolvería también las canceladas; se
-  // excluyen antes de paginar para que filas y totales coincidan.
   return filtroEstado.value
     ? store.fetchReservas(reservasParams(page))
     : store.fetchReservasSinCanceladas(reservasParams(page), page)

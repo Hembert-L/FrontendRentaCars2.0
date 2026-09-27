@@ -12,11 +12,6 @@
       Si necesitas otras fechas, edita primero la reserva.
     </p>
 
-    <!--
-      Desde una reserva, Laravel exige que las fechas del contrato sean
-      exactamente las de la reserva (que no guarda hora), por eso no se
-      permite editarlas ni elegir horario.
-    -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div v-if="!modoDirecto">
         <label class="text-xs font-semibold mb-1 block" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Entrega - fecha</label>
@@ -160,10 +155,6 @@ const props = defineProps({
   cargando:        { type: Boolean, default: false },
   consultados:     { type: Boolean, default: false },
   modoDirecto:     { type: Boolean, default: false },
-  // Cuando el contrato viene de una reserva, Laravel usa el vehículo ya
-  // asignado a esa reserva (no el que se envíe en el payload). Si aquí se
-  // dejara elegir otro vehículo, la pantalla mostraría un vehículo/tarifa
-  // que Laravel terminaría ignorando. Por eso el selector se bloquea.
   bloqueado:       { type: Boolean, default: false },
 })
 

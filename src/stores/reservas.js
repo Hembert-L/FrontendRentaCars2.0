@@ -68,12 +68,6 @@ export const useReservasStore = defineStore("reservas", () => {
     }
   }
 
-  /**
-   * Listado sin reservas CANCELADAS con paginación calculada en el frontend.
-   * Laravel no permite excluir canceladas en /admin/reservas; si se ocultaban
-   * después de paginar en el servidor, cada página mostraba menos filas y el
-   * total ("de N reservas") seguía contando las canceladas.
-   */
   async function fetchReservasSinCanceladas(params = {}, page = 1, perPage = 10) {
     loading.value = true;
     error.value = null;
@@ -229,11 +223,6 @@ export const useReservasStore = defineStore("reservas", () => {
     return items.filter((reserva) => reserva.estado === "PENDIENTE" && !reserva.contrato);
   }
 
-  /**
-   * Reservas PENDIENTE o CONFIRMADA del cliente: son las que Laravel revisa en
-   * ContratoController::storeDirecto para rechazar un contrato directo con
-   * fechas traslapadas.
-   */
   async function fetchReservasVigentesCliente(cliente) {
     const items = await fetchReservasCliente(cliente);
     return items.filter((reserva) => ["PENDIENTE", "CONFIRMADA"].includes(reserva.estado));

@@ -304,12 +304,6 @@ function cambiarPagina(page) {
   paginaActual.value = page
 }
 
-// El listado de contratos (Contrato::with(['reserva:id,fecha_inicio,fecha_fin', ...]))
-// no trae embebidos ni `cliente` ni `vehiculo` (tampoco dentro de `reserva`), así que
-// esos campos venían vacíos aunque el contrato sí los tenga guardados. Cada contrato
-// SÍ guarda, desde que se crea, una foto fija en `info_registro.cliente` e
-// `info_registro.vehiculo` (ver ContratoController::store/storeDirecto) — se usa
-// como respaldo, sin necesidad de pedir listas completas al backend.
 function clienteContrato(contrato) {
   const embebido = contrato?.cliente || contrato?.reserva?.cliente || null
   if (embebido) return embebido

@@ -59,7 +59,6 @@ export const useUsuariosStore = defineStore('usuarios', () => {
         correo:   form.correo,
       }
       if (form.rol) payload.rol = form.rol
-      // Laravel solo cambia la contraseña si se envía (UpdateUsuarioRequest: sometimes|min:8).
       if (form.password) payload.password = form.password
 
       const res = await api.put(`/admin/usuarios/${form.id}`, payload)

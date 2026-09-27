@@ -216,7 +216,6 @@
               class="cierre-input cierre-input--sm cierre-input--type"
             >
               <option value="" disabled>Selecciona tipo</option>
-              <!-- Los daños se registran como incidencias (Laravel no acepta el tipo DANIO en cargos). -->
               <option v-for="tipo in TIPOS_CARGO_EDITABLES" :key="tipo.value" :value="tipo.value">{{ tipo.label }}</option>
             </select>
             <input
@@ -377,11 +376,6 @@
           </div>
         </div>
         <div class="cierre-ticket-line"></div>
-        <!--
-          monto_total_renta ya incluye los cargos registrados y las incidencias
-          cobradas al cliente (Laravel los suma al guardarlos). Por eso se
-          muestran como desglose del total, no como montos adicionales.
-        -->
         <div class="cierre-ticket-rows">
           <div class="cierre-ticket-row">
             <span>Renta acordada</span>
@@ -524,12 +518,9 @@ const aplicarCargoRetraso = ref(false);
 const montoRetraso = ref(15);
 const cerrarConDeuda = ref(false);
 const motivoCierreDeuda = ref("");
-// Reloj para que las horas de retraso (y el saldo previsto) se actualicen
-// mientras la pantalla está abierta; antes quedaban fijas al cargar.
 const ahora = ref(Date.now());
 let relojRetraso = null;
 
-// Tipos válidos en CargoAdicionalTipoEnum (RETRASO lo genera el cierre).
 const TIPOS_CARGO_EDITABLES = [
   { value: "COMBUSTIBLE", label: "Combustible" },
   { value: "DIA EXTRA", label: "Día extra" },
@@ -550,7 +541,6 @@ const pctEntrega = computed(() => nivelCombustiblePct(contrato.value?.nivel_comb
 const pctRecepcion = computed(() => nivelCombustiblePct(nivelRecepcion.value));
 const alertaCombustible = computed(() => pctRecepcion.value < pctEntrega.value);
 
-// Igual que CierreRentaController: 2 h de margen y horas completas (diffInHours).
 const horasRetraso = computed(() => {
   if (!contrato.value?.fecha_hora_devolucion) return 0;
   const devolucion = new Date(contrato.value.fecha_hora_devolucion).getTime();
@@ -576,15 +566,12 @@ const totalIncidenciasClienteRegistradas = computed(() =>
     .reduce((s, i) => s + Number(i.costo || 0), 0),
 );
 const pagadoContrato = computed(() => montoPagadoContrato(contrato.value));
-// Renta pactada sin cargos ni incidencias (misma fórmula que usa Laravel).
 const rentaBase = computed(() => {
   if (!contrato.value) return 0;
   const { dias_acordados: dias, precio_por_dia: precio, monto_descuento: descuento } = contrato.value;
   if (dias == null || precio == null) return Number(contrato.value.monto_total_renta || 0);
   return Math.max(0, Number(dias) * Number(precio) - Number(descuento || 0));
 });
-// Diferencia entre lo que Laravel guardó como total y la suma visible; se
-// muestra para que el desglose siempre cuadre con el total real.
 const ajusteContrato = computed(() => {
   if (!contrato.value) return 0;
   const suma = rentaBase.value + totalCargosRegistrados.value + totalIncidenciasClienteRegistradas.value;
@@ -745,8 +732,6 @@ async function cargarIncidenciasContrato() {
   incidenciasRegistradas.value = incidenciasDesdeLista(items);
 }
 
-// Las columnas de monto/costo son decimal(8,2): Laravel no limita decimales ni
-// tope, y un valor fuera de rango termina en error 500 en vez de un 422.
 const MONTO_MAXIMO = 999999.99;
 function montoValido(valor, { permitirCero = false } = {}) {
   const texto = String(valor ?? "").trim();
@@ -1005,8 +990,6 @@ function opcionesHtml(opciones, seleccionado) {
 const estiloCampoSwal = "width:100%;margin:0 0 .75rem;padding:.55rem .7rem;border:1px solid #d1d5db;border-radius:.5rem;font-size:.9rem;";
 const estiloEtiquetaSwal = "display:block;text-align:left;font-size:.75rem;font-weight:700;margin-bottom:.25rem;color:#4b5563;";
 
-// Ejecuta una corrección sobre un registro ya guardado y recarga el contrato
-// (Laravel recalcula el total y el estado de pago).
 async function ejecutarCorreccion(accion, mensajeExito) {
   if (operacionEnCurso.value || errorRecarga.value) return;
   guardandoCargos.value = true;
@@ -1119,7 +1102,6 @@ async function editarIncidenciaRegistrada(incidencia) {
   });
   if (!datos) return;
   if (datos.tipo_incidencia === "DANIO MECANICO" && incidencia.tipo_incidencia !== "DANIO MECANICO") {
-    // Laravel solo cambia el estado del vehículo al registrar, no al editar.
     await Swal.fire({
       icon: "info",
       title: "Revisa el estado del vehículo",
@@ -1225,8 +1207,6 @@ async function cerrarRenta() {
   } catch (e) {
     const mensaje = mensajeErrorOriginal(e) || store.error || "No se pudo cerrar la renta.";
     if (conRetraso && e.response?.status === 422 && /cargo por retraso/i.test(e.response?.data?.message || "")) {
-      // Laravel registró el cargo por retraso y detuvo el cierre hasta que se
-      // cobre: se recarga para mostrar el cargo y el nuevo saldo.
       aplicarCargoRetraso.value = false;
       cerrando.value = false;
       await recargarDatosContrato();

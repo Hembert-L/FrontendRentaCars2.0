@@ -103,7 +103,6 @@
               <p v-if="errors.rol" class="field-error mt-1">{{ errors.rol }}</p>
             </div>
 
-            <!-- Contraseña: obligatoria al crear, opcional al editar -->
             <div>
               <label class="field-label" :class="isDark ? 'text-gray-400' : 'text-gray-600'">
                 {{ modoEdicion ? 'Nueva contraseña (opcional)' : 'Contraseña temporal' }}

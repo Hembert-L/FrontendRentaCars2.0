@@ -62,7 +62,6 @@
       {{ advertenciaCierres }}
     </p>
 
-    <!-- Búsqueda y filtros del historial -->
     <div
       class="rounded-2xl border shadow-sm p-4 mb-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end"
       :class="isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'"
@@ -334,7 +333,6 @@ function fechaPagoISO(pago) {
   return `${fecha.getFullYear()}-${pad(fecha.getMonth() + 1)}-${pad(fecha.getDate())}`
 }
 
-// Todos los pagos ya están cargados en el store, así que se filtra localmente.
 const pagosFiltrados = computed(() => {
   const termino = normalizarTexto(filtros.busqueda)
   return pagosStore.pagos.filter((p) => {
@@ -637,8 +635,6 @@ function fmt(v) {
 }
 
 function nombreCliente(contrato) {
-  // El listado de contratos no incluye la relación `cliente`; cada contrato
-  // guarda una copia en info_registro.cliente desde que se crea.
   return contrato?.cliente?.nombre
     || contrato?.reserva?.cliente?.nombre
     || contrato?.info_registro?.cliente?.nombre

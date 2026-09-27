@@ -453,7 +453,6 @@ async function fetchDashboard() {
     vehiculosPorEstado.value = data.graficas.vehiculos_por_estado;
     ultimasReservas.value = data.ultimas_reservas;
   } catch (e) {
-    // Muestra el motivo real (p. ej. el 403 "No tienes permiso..." para el rol CONTADOR).
     error.value = e.response?.data?.message || e.message;
   } finally {
     loading.value = false;

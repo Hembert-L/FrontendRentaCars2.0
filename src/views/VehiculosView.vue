@@ -160,7 +160,6 @@
         <span class="text-sm">{{ loadingLabel }}</span>
       </div>
 
-      <!-- Seguros en móvil: tarjetas legibles en lugar de una tabla de 1000px -->
       <div
         v-if="!isLoadingTab && activeTab === 'seguros'"
         class="md:hidden divide-y"
@@ -709,7 +708,6 @@ const puedeAvanzar = computed(() => pagination.value.current_page < pagination.v
 const marcas = computed(() => store.marcas);
 const categorias = computed(() => store.categorias);
 const propietarios = computed(() => store.propietarios);
-// Lista completa de vehículos (todas las páginas), solo para contadores.
 const vehiculosCompletos = computed(() => store.todosVehiculos);
 const seguros = computed(() => segurosStore.seguros);
 const proximoAVencer = computed(() => segurosStore.proximoAVencer);
@@ -816,7 +814,6 @@ onMounted(() => {
   if (route.query.tab) cambiarTab(String(route.query.tab));
 });
 
-// Navegar con atrás/adelante entre pestañas enlazadas.
 watch(() => route.query.tab, (tab) => {
   cambiarTab(tab ? String(tab) : "vehiculos");
 });
@@ -1003,7 +1000,6 @@ function cambiarTab(tab) {
   if (!tabsVisibles.value.some((t) => t.value === tab)) return;
   if (activeTab.value === tab) return;
   activeTab.value = tab;
-  // Deja la pestaña en la URL (?tab=...) para poder enlazarla o recargar sin perderla.
   if (route.query.tab !== tab) {
     router.replace({ query: { ...route.query, tab: tab === "vehiculos" ? undefined : tab } });
   }
@@ -1135,9 +1131,6 @@ function contarModelosPorMarca(marcaId) {
 }
 
 function contarVehiculosRelacionados(item) {
-  // Importante: se cuenta sobre `vehiculosCompletos` (todas las páginas),
-  // nunca sobre `vehiculos` (paginado), porque contar sobre la página
-  // actual da cifras incompletas apenas hay más de una página de vehículos.
   const id = item.id;
   if (activeTab.value === "categorias") {
     return vehiculosCompletos.value.filter(
@@ -1720,9 +1713,6 @@ async function mostrarErrorSeguro(e, fallback) {
 async function cargarModelos() {
   cargandoModelos.value = true;
   try {
-    // fetchAllPaginated trae TODAS las páginas; usar solo la primera página
-    // (como antes) dejaba "modelos_count" incompleto en Marcas cuando había
-    // más de una página de modelos.
     const { items } = await fetchAllPaginated((params) => api.get("/admin/modelos", { params }));
     modelos.value = items;
   } catch {

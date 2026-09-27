@@ -197,8 +197,6 @@ const reportes = [
   {
     id: 'gastos-por-vehiculo',
     titulo: 'Gastos por vehículo',
-    // Laravel (ReporteController::gastosPorVehiculo) solo suma incidencias con
-    // responsable NEGOCIO; los mantenimientos no entran en este cálculo.
     descripcion: 'Costo de las incidencias asumidas por el negocio, agrupado por vehículo. No incluye mantenimientos.',
     icono: 'pi-wrench',
     endpoint: '/admin/reportes/gastos-por-vehiculo',
@@ -283,8 +281,6 @@ async function generarReporte(reporte, modo = 'abrir') {
 
   generando.value = reporte.id
   try {
-    // abrirPdf debe llamarse sin ningún await previo para que el navegador
-    // asocie la pestaña nueva al clic y no la bloquee.
     const resultado = modo === 'descargar'
       ? await descargarPdf(reporte.endpoint, paramsReporte(reporte), `reporte-${reporte.id}.pdf`)
       : await abrirPdf(reporte.endpoint, paramsReporte(reporte))

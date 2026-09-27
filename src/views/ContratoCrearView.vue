@@ -164,7 +164,6 @@ const reservasStore = useReservasStore()
 const reservaId = ref(route.query.reserva_id ? Number(route.query.reserva_id) : null)
 const reservaOrigen = ref(null)
 const reservasCliente = ref([])
-// Incluye también las CONFIRMADAS; solo se usa para detectar traslapes.
 const reservasVigentesCliente = ref([])
 const cargandoReservasCliente = ref(false)
 const sinReservaDisponible = ref(false)
@@ -228,9 +227,6 @@ const mensajeContratoActivo = computed(() => {
   return `Este cliente ya tiene un contrato activo (${contratoActivoCliente.value.numero_contrato}). Debe cerrarse antes de generar otro contrato.`
 })
 
-// Un contrato directo (sin reserva) no debe poder generarse con fechas que
-// se crucen con una reserva PENDIENTE o CONFIRMADA del mismo cliente: antes
-// esto avanzaba hasta el final y Laravel lo rechazaba recién al confirmar.
 const reservaTraslapada = computed(() => {
   if (esDesdeReserva.value) return null
   if (!fechaEntrega.value || !fechaDevolucion.value) return null
@@ -256,7 +252,6 @@ const vehiculoSel = computed(() => {
   if (Number(reservaOrigen.value?.vehiculo?.id) === Number(vehiculoId.value)) return reservaOrigen.value.vehiculo
   return null
 })
-// Laravel exige que el vehículo de la reserva esté DISPONIBLE al generar.
 const mensajeVehiculoReserva = computed(() => {
   if (!esDesdeReserva.value || !vehiculoSel.value?.estado) return ''
   if (vehiculoSel.value.estado === 'DISPONIBLE') return ''
@@ -430,10 +425,6 @@ async function consultarVehiculos() {
   if (!reservaId.value) vehiculoId.value = ''
   try {
     if (reservaId.value) {
-      // Laravel (ContratoController::store) siempre usa el vehículo de la
-      // reserva e ignora cualquier otro vehiculo_id. Por eso aquí solo se
-      // muestra ese vehículo: así el nombre y la tarifa que ve el usuario son
-      // los mismos que quedarán guardados en el contrato.
       const disponibles = await reservasStore.fetchVehiculosDisponibles(
         fechaEntrega.value,
         fechaDevolucion.value,
@@ -532,8 +523,6 @@ async function generarContrato() {
       observaciones_entrega:     observacionesEntrega.value,
     }
     if (reservaId.value) {
-      // ContratoController::store rechaza el contrato si estas fechas no son
-      // idénticas a las de la reserva, que se guardan sin hora (00:00).
       payload.reserva_id = reservaId.value
       payload.fecha_hora_entrega = `${fechaSolo(reservaOrigen.value?.fecha_inicio) || fechaEntrega.value} 00:00:00`
       payload.fecha_hora_devolucion = `${fechaSolo(reservaOrigen.value?.fecha_fin) || fechaDevolucion.value} 00:00:00`
@@ -698,7 +687,6 @@ function cerrarPreviewContrato() {
 .wizard-btn--primary:hover:not(:disabled) { opacity: 0.92; transform: translateY(-1px); }
 .wizard-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
-/* Teléfonos: el asistente ocupa todo el ancho y el stepper no desborda. */
 @media (max-width: 639px) {
   .wizard-body { padding: 0 0 1.5rem; gap: 1rem; }
   .wizard-header { gap: 0.6rem; padding-top: 0.5rem; flex-wrap: wrap; }

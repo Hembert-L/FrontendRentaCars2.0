@@ -4,11 +4,6 @@ import api from '@/services/api'
  * Descarga un PDF autenticado desde la API y lo abre en una nueva pestaña.
  */
 export async function abrirPdf(url, params = {}) {
-  // Se abre la pestaña en blanco de forma SÍNCRONA, dentro del mismo gesto de
-  // clic del usuario. Si se espera a que llegue el PDF (await) antes de
-  // llamar a window.open, el navegador ya no lo reconoce como una acción
-  // iniciada por el usuario y bloquea el popup — por eso antes la apertura
-  // del PDF quedaba bloqueada.
   const ventana = window.open('', '_blank')
   mostrarCargandoEnVentana(ventana)
 
@@ -16,8 +11,6 @@ export async function abrirPdf(url, params = {}) {
     const { blob, filename } = await pedirPdf(url, params)
 
     if (!ventana || ventana.closed) {
-      // El navegador también bloqueó la pestaña en blanco (o el usuario la
-      // cerró): se recurre a la descarga directa como respaldo.
       descargarBlob(blob, filename)
       return { modo: 'descarga', filename }
     }
@@ -32,9 +25,6 @@ export async function abrirPdf(url, params = {}) {
   }
 }
 
-/**
- * Descarga un PDF autenticado directamente como archivo (sin abrir pestaña).
- */
 export async function descargarPdf(url, params = {}, nombrePorDefecto = 'documento.pdf') {
   const { blob, filename } = await pedirPdf(url, params, nombrePorDefecto)
   descargarBlob(blob, filename)
@@ -68,7 +58,7 @@ function mostrarCargandoEnVentana(ventana) {
     ventana.document.body.innerHTML =
       '<p style="font-family:system-ui,sans-serif;color:#4b5563;text-align:center;margin-top:20vh">Generando PDF, espera un momento...</p>'
   } catch {
-    /* si no se puede escribir en la pestaña, simplemente queda en blanco */
+    return
   }
 }
 
@@ -107,8 +97,6 @@ export function descargarBlob(blob, filename) {
   a.href = url
   a.download = filename
   a.style.display = 'none'
-  // Firefox solo dispara la descarga si el enlace está en el documento, y
-  // revocar la URL en el mismo tick puede cancelarla.
   document.body.appendChild(a)
   a.click()
   a.remove()
@@ -121,11 +109,6 @@ function extraerNombre(response) {
   return match?.[2] ? decodeURIComponent(match[2]) : null
 }
 
-/**
- * Con responseType 'blob', el JSON de error de Laravel llega como Blob y axios
- * solo muestra "Request failed with status code 500". Aquí se lee ese Blob
- * para mostrar el mensaje real del servidor.
- */
 async function errorConMensajeDelServidor(error) {
   const data = error.response?.data
   if (!(data instanceof Blob)) return error
@@ -134,7 +117,7 @@ async function errorConMensajeDelServidor(error) {
     error.response.data = json
     if (json?.message) error.message = json.message
   } catch {
-    /* el cuerpo no era JSON: se conserva el error original */
+    return error
   }
   return error
 }

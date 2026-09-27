@@ -40,10 +40,6 @@ export const useVehiculosStore = defineStore('vehiculos', () => {
   }
   let catalogosPromesa = null
 
-  // Lista completa (todas las páginas) de vehículos, usada solo para calcular
-  // contadores por marca/categoría/propietario. La lista `vehiculos` de arriba
-  // es la paginada que alimenta la tabla y NO debe usarse para contar, porque
-  // solo contiene la página actual.
   const todosVehiculos = ref([])
   const todosVehiculosCargados = ref(false)
   let todosVehiculosPromesa = null

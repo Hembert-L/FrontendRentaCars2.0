@@ -180,7 +180,6 @@ const darkSwitch = computed({
 });
 
 const props = defineProps({
-  // En pantallas pequeñas la barra es un menú deslizable (siempre expandido).
   movil: { type: Boolean, default: false },
   abierto: { type: Boolean, default: false },
 });
