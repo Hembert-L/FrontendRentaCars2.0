@@ -37,7 +37,7 @@
           <div v-if="reporteAbierto === reporte.id" class="reporte-panel">
             <p class="reporte-panel__description">{{ reporte.descripcion }}</p>
 
-            <div v-if="reporte.needsPeriod || reporte.needsDias || reporte.needsPropietario" class="reporte-filters">
+            <div v-if="reporte.needsPeriod || reporte.needsDias || reporte.needsPropietario || reporte.needsPorcentaje" class="reporte-filters">
               <div v-if="reporte.needsPeriod" class="filter-group filter-group--wide">
                 <label>Periodo rápido</label>
                 <div class="period-options">
@@ -78,13 +78,37 @@
 
               <div v-if="reporte.needsPropietario" class="filter-group">
                 <label :for="`propietario-${reporte.id}`">Propietario</label>
-                <input
+                <select
                   :id="`propietario-${reporte.id}`"
-                  v-model.trim="filtros.propietario"
-                  type="text"
+                  v-model="filtros.propietarioId"
                   class="filter-control"
-                  placeholder="Nombre del propietario"
+                  :disabled="cargandoPropietarios"
+                >
+                  <option value="">
+                    {{ cargandoPropietarios ? 'Cargando propietarios...' : 'Todos los propietarios' }}
+                  </option>
+                  <option v-for="p in propietarios" :key="p.id" :value="String(p.id)">
+                    {{ p.nombre }}{{ p.tipo_propietario ? ` (${labelTipoPropietario(p.tipo_propietario)})` : '' }}
+                  </option>
+                </select>
+                <small v-if="errorPropietarios" class="filter-hint filter-hint--error">
+                  {{ errorPropietarios }}
+                  <button type="button" class="filter-retry" @click="cargarPropietarios">Reintentar</button>
+                </small>
+              </div>
+
+              <div v-if="reporte.needsPorcentaje" class="filter-group">
+                <label :for="`porcentaje-${reporte.id}`">% de administración</label>
+                <input
+                  :id="`porcentaje-${reporte.id}`"
+                  v-model.number="filtros.porcentajeAdmin"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  class="filter-control"
                 />
+                <small class="filter-hint">Se descuenta de los ingresos de propietarios que no son propios.</small>
               </div>
             </div>
 
@@ -129,6 +153,8 @@
 import { reactive, ref, onMounted } from 'vue'
 import Swal from 'sweetalert2'
 import { useAppTheme } from '@/composables/useAppTheme'
+import api from '@/services/api'
+import { fetchAllPaginated } from '@/utils/apiPagination'
 import { abrirPdf, descargarPdf } from '@/utils/pdfDownload'
 import { toastSuccess } from '@/utils/toast'
 
@@ -142,8 +168,32 @@ const filtros = reactive({
   fechaInicio: '',
   fechaFin: '',
   dias: 30,
-  propietario: '',
+  propietarioId: '',
+  porcentajeAdmin: 0,
 })
+
+const propietarios = ref([])
+const cargandoPropietarios = ref(false)
+const errorPropietarios = ref('')
+
+async function cargarPropietarios() {
+  cargandoPropietarios.value = true
+  errorPropietarios.value = ''
+  try {
+    const { items } = await fetchAllPaginated((params) => api.get('/admin/propietarios', { params }))
+    propietarios.value = [...items].sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), 'es'))
+  } catch (e) {
+    propietarios.value = []
+    errorPropietarios.value = e.response?.data?.message || 'No se pudo cargar la lista de propietarios.'
+  } finally {
+    cargandoPropietarios.value = false
+  }
+}
+
+function labelTipoPropietario(tipo) {
+  const labels = { PROPIO: 'propio', TERCERO: 'tercero', FAMILIAR: 'familiar' }
+  return labels[tipo] || String(tipo).toLowerCase()
+}
 
 const reportes = [
   {
@@ -218,6 +268,7 @@ const reportes = [
     endpoint: '/admin/reportes/resultado-neto-por-propietario',
     needsPeriod: true,
     needsPropietario: true,
+    needsPorcentaje: true,
   },
   {
     id: 'saldos-pendientes',
@@ -268,7 +319,8 @@ function seleccionarPeriodo(valor) {
 
 function limpiarFiltros(reporte) {
   filtros.dias = 30
-  filtros.propietario = ''
+  filtros.propietarioId = ''
+  filtros.porcentajeAdmin = 0
   if (reporte.needsPeriod) seleccionarPeriodo('mes')
 }
 
@@ -310,6 +362,11 @@ function validarReporte(reporte) {
     return 'Los días por vencer deben estar entre 1 y 365.'
   }
 
+  const porcentaje = Number(filtros.porcentajeAdmin || 0)
+  if (reporte.needsPorcentaje && (!Number.isFinite(porcentaje) || porcentaje < 0 || porcentaje > 100)) {
+    return 'El porcentaje de administración debe estar entre 0 y 100.'
+  }
+
   return ''
 }
 
@@ -322,7 +379,11 @@ function paramsReporte(reporte) {
   }
 
   if (reporte.needsDias) params.dias = filtros.dias
-  if (reporte.needsPropietario && filtros.propietario) params.propietario = filtros.propietario
+  // propietario_id filtra exacto (el filtro por nombre del backend es parcial).
+  if (reporte.needsPropietario && filtros.propietarioId) params.propietario_id = filtros.propietarioId
+  if (reporte.needsPorcentaje && Number(filtros.porcentajeAdmin) > 0) {
+    params.porcentaje_administracion = Number(filtros.porcentajeAdmin)
+  }
 
   return params
 }
@@ -347,6 +408,7 @@ function fechaISO(fecha) {
 
 onMounted(() => {
   seleccionarPeriodo('mes')
+  cargarPropietarios()
   const reporteGuardado = localStorage.getItem(STORAGE_KEY_REPORTE_ABIERTO)
   if (reportes.some((reporte) => reporte.id === reporteGuardado)) {
     reporteAbierto.value = reporteGuardado
@@ -540,6 +602,36 @@ onMounted(() => {
 .filter-control:focus {
   border-color: #c0392b;
   box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.12);
+}
+
+.filter-control:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.filter-hint {
+  color: #64748b;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.reporte-item--dark .filter-hint {
+  color: #94a3b8;
+}
+
+.filter-hint--error {
+  color: #b91c1c;
+}
+
+.reporte-item--dark .filter-hint--error {
+  color: #fca5a5;
+}
+
+.filter-retry {
+  margin-left: 0.35rem;
+  font-weight: 800;
+  text-decoration: underline;
+  color: inherit;
 }
 
 .period-options {
