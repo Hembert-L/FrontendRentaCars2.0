@@ -114,6 +114,7 @@
 import { ref, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { rutaInicio } from '@/utils/permisos'
 import logoElGuayabo from '@/assets/logo-el-guayabo.png'
 
 const route     = useRoute()
@@ -144,7 +145,7 @@ async function handleLogin() {
     await authStore.login(form.email, form.password, form.remember)
 
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : null
-    router.push(redirect || { name: 'dashboard' })
+    router.push(redirect || rutaInicio(authStore.userRoles))
 
   } catch (e) {
     const msg = e.response?.data?.message || 'Credenciales incorrectas. Intenta de nuevo.'

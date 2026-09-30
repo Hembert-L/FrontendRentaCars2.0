@@ -49,6 +49,7 @@
           Principal
         </p>
         <SidebarItem
+          v-if="acceso.dashboard"
           icon="pi-home"
           label="Dashboard"
           :collapsed="collapsed"
@@ -89,7 +90,7 @@
         />
       </div>
 
-      <div v-if="puedeOperar">
+      <div v-if="acceso.pagos || puedeOperar || acceso.reportes">
         <p
           v-if="!collapsed"
           class="text-xs font-bold tracking-widest uppercase px-3 mb-2"
@@ -98,6 +99,7 @@
           Operaciones
         </p>
         <SidebarItem
+          v-if="acceso.pagos"
           icon="pi-credit-card"
           label="Pagos"
           :collapsed="collapsed"
@@ -105,6 +107,7 @@
           @click="navegar('pagos')"
         />
         <SidebarItem
+          v-if="puedeOperar"
           icon="pi-wrench"
           label="Mantenimiento"
           :collapsed="collapsed"
@@ -112,6 +115,7 @@
           @click="navegar('mantenimiento')"
         />
         <SidebarItem
+          v-if="acceso.reportes"
           icon="pi-chart-bar"
           label="Reportes"
           :collapsed="collapsed"
@@ -167,13 +171,17 @@ import InputSwitch from "primevue/inputswitch";
 import SidebarItem from "./SidebarItem.vue";
 import { useThemeStore } from "@/stores/theme";
 import { useAuthStore } from "@/stores/auth";
+import { tieneAcceso } from "@/utils/permisos";
 import logoElGuayabo from "@/assets/logo-el-guayabo.png";
 
 const themeStore = useThemeStore();
 const authStore = useAuthStore();
-const puedeOperar = computed(() =>
-  authStore.userRoles.some((role) => ["ADMINISTRADOR", "EMPLEADO"].includes(role)),
-);
+const acceso = computed(() => ({
+  dashboard: tieneAcceso(authStore.userRoles, "dashboard"),
+  pagos: tieneAcceso(authStore.userRoles, "pagos"),
+  reportes: tieneAcceso(authStore.userRoles, "reportes"),
+}));
+const puedeOperar = computed(() => tieneAcceso(authStore.userRoles, "operacion"));
 const darkSwitch = computed({
   get: () => themeStore.isDark,
   set: (v) => themeStore.setDark(v),
