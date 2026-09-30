@@ -198,6 +198,14 @@ watch(
   },
 )
 
+// yyyy-mm-dd en hora local, el back manda la fecha en utc
+function fechaLocal(valor) {
+  const d = new Date(valor)
+  if (Number.isNaN(d.getTime())) return ''
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
 function sumarDia(fechaIso) {
   const d = new Date(`${fechaIso}T00:00:00`)
   d.setDate(d.getDate() + 1)
@@ -212,7 +220,7 @@ async function cargarVehiculos() {
   try {
     // disponibles desde hoy hasta la devolucion
     const hoy = fechaHoyLocal()
-    const devolucion = String(props.contrato?.fecha_hora_devolucion || '').slice(0, 10)
+    const devolucion = fechaLocal(props.contrato?.fecha_hora_devolucion)
     const fin = devolucion > hoy ? devolucion : sumarDia(hoy)
     const lista = await reservasStore.fetchVehiculosDisponibles(hoy, fin)
     const actualId = Number(props.contrato?.vehiculo_id ?? props.contrato?.vehiculo?.id)

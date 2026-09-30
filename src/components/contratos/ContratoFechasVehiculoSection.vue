@@ -4,7 +4,7 @@
     <p class="text-xs mb-2 -mt-2" :class="isDark ? 'text-gray-500' : 'text-gray-400'">
       {{ modoDirecto
         ? 'El contrato inicia en el momento de generarlo. Selecciona la fecha de devolución para calcular los días acordados.'
-        : 'La entrega se registra el día de inicio de la reserva y la devolución se calcula con los días reservados.' }}
+        : 'La entrega se registra a la hora en que se genera el contrato (el día de inicio de la reserva). La devolución es a esa misma hora, al terminar los días reservados.' }}
     </p>
 
     <p v-if="bloqueado" class="text-xs mb-2 -mt-1 rounded-xl p-3 border font-semibold" :class="isDark ? 'text-amber-300 bg-amber-950/30 border-amber-900/40' : 'text-amber-700 bg-amber-50 border-amber-100'">

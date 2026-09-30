@@ -86,6 +86,7 @@
         <p v-if="mensajeContratoActivo" class="wizard-error">{{ mensajeContratoActivo }}</p>
         <p v-if="mensajeReservaTraslapada" class="wizard-error">{{ mensajeReservaTraslapada }}</p>
         <p v-if="mensajeVehiculoReserva" class="wizard-error">{{ mensajeVehiculoReserva }}</p>
+        <p v-if="mensajeDiaEntrega" class="wizard-error">{{ mensajeDiaEntrega }}</p>
 
         <!-- Navegación -->
         <div class="wizard-nav">
@@ -246,6 +247,14 @@ const vehiculoSel = computed(() => {
   if (Number(reservaOrigen.value?.vehiculo?.id) === Number(vehiculoId.value)) return reservaOrigen.value.vehiculo
   return null
 })
+// la entrega es ahora mismo, y el back exige que sea el dia de inicio de la reserva
+const mensajeDiaEntrega = computed(() => {
+  const inicio = fechaSolo(reservaOrigen.value?.fecha_inicio)
+  if (!esDesdeReserva.value || !inicio || inicio === fechaHoyLocal()) return ''
+  return inicio > fechaHoyLocal()
+    ? `Esta reserva inicia el ${formatFecha(inicio)}. El contrato se genera el día de la entrega del vehículo.`
+    : `Esta reserva iniciaba el ${formatFecha(inicio)} y ya pasó ese día. Edita las fechas de la reserva o genera un contrato directo.`
+})
 const mensajeVehiculoReserva = computed(() => {
   if (!esDesdeReserva.value || !vehiculoSel.value?.estado) return ''
   if (vehiculoSel.value.estado === 'DISPONIBLE') return ''
@@ -269,7 +278,8 @@ const paso2Ok = computed(() =>
   !!fechaDevolucion.value &&
   precioDia.value > 0 &&
   !reservaTraslapada.value &&
-  !mensajeVehiculoReserva.value,
+  !mensajeVehiculoReserva.value &&
+  !mensajeDiaEntrega.value,
 )
 const puedeGenerar = computed(() => paso1Ok.value && paso2Ok.value && dias.value > 0)
 
@@ -445,6 +455,12 @@ async function consultarVehiculos() {
   }
 }
 
+function fechaHoraActual() {
+  const d = new Date()
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
 function fechaSolo(fecha) {
   if (!fecha) return ''
   return typeof fecha === 'string' ? fecha.slice(0, 10) : fecha
@@ -505,6 +521,10 @@ async function generarContrato() {
     error.value = mensajeVehiculoReserva.value
     return
   }
+  if (mensajeDiaEntrega.value) {
+    error.value = mensajeDiaEntrega.value
+    return
+  }
   generando.value = true
   error.value = ''
   try {
@@ -518,8 +538,8 @@ async function generarContrato() {
     }
     if (reservaId.value) {
       payload.reserva_id = reservaId.value
-      // la devolucion la calcula el back con los dias de la reserva
-      payload.fecha_hora_entrega = `${fechaSolo(reservaOrigen.value?.fecha_inicio) || fechaEntrega.value} 00:00:00`
+      // hora real de entrega, el back suma los dias de la reserva para la devolucion
+      payload.fecha_hora_entrega = fechaHoraActual()
     } else {
       payload.dias_acordados = dias.value
     }

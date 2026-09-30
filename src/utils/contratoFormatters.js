@@ -19,7 +19,9 @@ export const HORAS_PERMITIDAS_OPCIONES = HORAS_PERMITIDAS.map((value) => ({
 export function formatFechaHora12(valor) {
   if (!valor) return '—'
   const s = String(valor)
-  const match = s.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/)
+  // las fechas del back vienen en utc (terminan en Z), si se leen tal cual salen 6 horas adelantadas
+  const tieneZona = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(s)
+  const match = !tieneZona && s.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/)
   if (match) {
     const y = parseInt(match[1], 10)
     const mo = parseInt(match[2], 10)
