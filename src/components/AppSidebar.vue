@@ -11,7 +11,7 @@
       :class="{ 'sidebar-brand--collapsed': collapsed }"
     >
       <div class="sidebar-logo">
-        <img :src="logoElGuayabo" alt="El Guayabo RentCar" class="w-full h-full object-contain" />
+        <img :src="logoElGuayabo" alt="El Guayabo RentaCar" class="w-full h-full object-contain" />
       </div>
       <div class="sidebar-title" :class="{ 'sidebar-title--collapsed': collapsed }">
         <span class="text-white font-extrabold text-base tracking-widest uppercase">RentaCar</span>

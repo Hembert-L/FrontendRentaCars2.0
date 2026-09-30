@@ -18,7 +18,7 @@
       <div class="login-logo-slot">
         <img
           :src="logoElGuayabo"
-          alt="El Guayabo Rent Car"
+          alt="El Guayabo Renta Car"
           class="login-logo login-logo--panel"
         />
         <p class="login-brand-text">
