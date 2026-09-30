@@ -144,7 +144,7 @@
                 <div class="acciones-piramide">
                   <div class="acciones-piramide__top">
                     <router-link
-                      v-if="puedeGenerarContrato(r)"
+                      v-if="puedeGenerarContrato(r) && esDiaDeEntrega(r)"
                       :to="{ name: 'contratos-nuevo', query: { reserva_id: r.id } }"
                       class="w-8 h-8 rounded-lg flex items-center justify-center border transition-all hover:shadow-sm no-underline hover:no-underline"
                       :class="isDark
@@ -154,6 +154,18 @@
                     >
                       <i class="pi pi-file-edit text-xs"></i>
                     </router-link>
+                    <button
+                      v-else-if="puedeGenerarContrato(r)"
+                      type="button"
+                      disabled
+                      class="w-8 h-8 rounded-lg flex items-center justify-center border opacity-40 cursor-not-allowed"
+                      :class="isDark
+                        ? 'border-green-900/50 bg-green-950/30 text-green-400'
+                        : 'border-green-200 bg-green-50 text-green-700'"
+                      :title="motivoSinContrato(r)"
+                    >
+                      <i class="pi pi-file-edit text-xs"></i>
+                    </button>
                     <button
                       type="button"
                       class="w-8 h-8 rounded-lg flex items-center justify-center border transition-all hover:shadow-sm"
@@ -273,7 +285,7 @@ import ReservaCancelarModal from '@/components/reservas/ReservaCancelarModal.vue
 import ReservasCanceladasModal from '@/components/reservas/ReservasCanceladasModal.vue'
 import { useReservasStore } from '@/stores/reservas'
 import { useAppTheme } from '@/composables/useAppTheme'
-import { formatFecha } from '@/utils/reservaFormatters'
+import { formatFecha, fechaHoyLocal, fechaSoloISO } from '@/utils/reservaFormatters'
 import { toastSuccess } from '@/utils/toast'
 import api from '@/services/api'
 import { fetchAllPaginated } from '@/utils/apiPagination'
@@ -470,6 +482,18 @@ function puedeCancelarReserva(reserva) {
 
 function puedeGenerarContrato(reserva) {
   return reserva?.estado === 'PENDIENTE' && !reserva?.contrato
+}
+
+// el contrato se hace el dia que se entrega el carro
+function esDiaDeEntrega(reserva) {
+  return fechaSoloISO(reserva?.fecha_inicio) === fechaHoyLocal()
+}
+
+function motivoSinContrato(reserva) {
+  const inicio = fechaSoloISO(reserva?.fecha_inicio)
+  return inicio > fechaHoyLocal()
+    ? `El contrato se genera el día de inicio (${formatFecha(inicio)})`
+    : 'La fecha de inicio ya pasó: actualiza las fechas de la reserva'
 }
 
 function nombreVehiculo(v) {

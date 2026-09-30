@@ -52,6 +52,8 @@ const router = createRouter({
         { path: 'reportes/vista', name: 'reportes-vista', component: () => import('../components/reportes/ReporteVista.vue'), meta: { allowedRoles: reportes } },
       ],
     },
+    // una direccion que no existe manda al inicio de cada rol
+    { path: '/:pathMatch(.*)*', redirect: { name: 'inicio' } },
   ],
 })
 

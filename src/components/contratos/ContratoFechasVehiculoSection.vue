@@ -132,6 +132,7 @@
 import { computed, ref, watch } from 'vue'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { nombreVehiculo, formatPrecio } from '@/utils/contratoFormatters'
+import { fechaHoyLocal, sumarDiasISO } from '@/utils/reservaFormatters'
 
 const props = defineProps({
   fechaEntrega:    { type: String, default: '' },
@@ -147,16 +148,13 @@ const props = defineProps({
 const emit = defineEmits(['update:fechaEntrega', 'update:fechaDevolucion', 'update:vehiculoId'])
 
 const { isDark } = useAppTheme()
-const hoy = new Date().toISOString().split('T')[0]
+const hoy = fechaHoyLocal()
 const vehiculosPorPagina = 6
 const paginaVehiculos = ref(1)
 const busquedaVehiculo = ref('')
 
 const minFechaDevolucion = computed(() => {
-  const base = props.fechaEntrega || hoy
-  const d = new Date(`${base}T00:00:00`)
-  d.setDate(d.getDate() + 1)
-  return d.toISOString().split('T')[0]
+  return sumarDiasISO(props.fechaEntrega || hoy, 1)
 })
 
 const paginacionVehiculos = computed(() => {
