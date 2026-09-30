@@ -36,8 +36,6 @@
       >
         <option value="">Todos los estados</option>
         <option value="ACTIVO">Activo</option>
-        <option value="PENDIENTE">Pendiente</option>
-        <option value="VENCIDO">Vencido</option>
         <option value="FINALIZADO">Finalizado</option>
         <option value="ANULADO">Anulado</option>
       </select>
@@ -99,7 +97,7 @@
               <td class="px-5 py-4 tabular-nums" :class="isDark ? 'text-gray-200' : 'text-gray-800'">
                 <p class="font-bold">${{ formatPrecio(totalFinalContrato(c)) }}</p>
                 <p v-if="montoExtrasContrato(c) > 0" class="text-xs font-semibold mt-0.5" style="color:#d97706;">
-                  +${{ formatPrecio(montoExtrasContrato(c)) }} extras
+                  Incluye ${{ formatPrecio(montoExtrasContrato(c)) }} extras
                 </p>
                 <p v-if="montoPagadoContrato(c) > 0" class="text-xs mt-0.5" :class="isDark ? 'text-gray-500' : 'text-gray-400'">
                   Pagado: ${{ formatPrecio(montoPagadoContrato(c)) }}
@@ -143,6 +141,27 @@
                     <i class="pi pi-flag text-[10px]"></i>
                     Cerrar
                   </router-link>
+                  <button
+                    v-if="c.estado_contrato === 'ACTIVO'"
+                    type="button"
+                    class="w-8 h-8 rounded-lg flex items-center justify-center border transition-all hover:shadow-sm shrink-0"
+                    :class="isDark ? 'border-amber-800 bg-amber-950/40 text-amber-300 hover:bg-amber-950/70' : 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'"
+                    title="Cambiar vehículo"
+                    @click="abrirCambioVehiculo(c)"
+                  >
+                    <i class="pi pi-sync text-xs"></i>
+                  </button>
+                  <button
+                    v-if="authStore.isAdmin && c.estado_contrato === 'ACTIVO'"
+                    type="button"
+                    class="w-8 h-8 rounded-lg flex items-center justify-center border transition-all hover:shadow-sm shrink-0"
+                    :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-400 hover:bg-gray-700' : 'border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100'"
+                    title="Anular contrato"
+                    :disabled="anulando === c.id"
+                    @click="anularContrato(c)"
+                  >
+                    <i :class="anulando === c.id ? 'pi pi-spin pi-spinner' : 'pi pi-ban'" class="text-xs"></i>
+                  </button>
                 </div>
               </td>
             </tr>
@@ -194,6 +213,15 @@
     </div>
 
     <ContratoPdfPreview :visible="modalPdf" :contrato="contratoVer" @cerrar="cerrarPdf" />
+    <ContratoCambiarVehiculoModal
+      :visible="Boolean(contratoCambio)"
+      :contrato="contratoCambio"
+      :guardando="cambiandoVehiculo"
+      :errores-servidor="erroresCambio"
+      :error-servidor="errorCambio"
+      @cerrar="contratoCambio = null"
+      @confirmar="confirmarCambioVehiculo"
+    />
   </div>
 </template>
 
@@ -202,8 +230,11 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Swal from 'sweetalert2'
 import ContratoPdfPreview from '@/components/contratos/ContratoPdfPreview.vue'
+import ContratoCambiarVehiculoModal from '@/components/contratos/ContratoCambiarVehiculoModal.vue'
 import { useContratosStore } from '@/stores/contratos'
+import { useAuthStore } from '@/stores/auth'
 import { useAppTheme } from '@/composables/useAppTheme'
+import { toastSuccess } from '@/utils/toast'
 import {
   nombreVehiculo,
   formatPrecio,
@@ -219,8 +250,14 @@ const { isDark } = useAppTheme()
 const route = useRoute()
 const router = useRouter()
 const store = useContratosStore()
+const authStore = useAuthStore()
 
 const buscar = ref('')
+const anulando = ref(null)
+const contratoCambio = ref(null)
+const cambiandoVehiculo = ref(false)
+const erroresCambio = ref({})
+const errorCambio = ref('')
 const filtroEstado = ref('')
 const filtroPago = ref('')
 const modalPdf = ref(false)
@@ -231,10 +268,8 @@ const contratosPorPagina = 10
 
 const ordenEstadoContrato = {
   ACTIVO: 1,
-  VENCIDO: 2,
-  PENDIENTE: 3,
-  FINALIZADO: 4,
-  ANULADO: 5,
+  FINALIZADO: 2,
+  ANULADO: 3,
 }
 
 const ordenPagoContrato = {
@@ -336,7 +371,7 @@ function ordenarContratos(lista) {
     const estadoB = ordenEstadoContrato[b.estado_contrato] ?? 99
     if (estadoA !== estadoB) return estadoA - estadoB
 
-    if (a.estado_contrato === 'ACTIVO' || a.estado_contrato === 'VENCIDO') {
+    if (a.estado_contrato === 'ACTIVO') {
       const pagoA = ordenPagoContrato[a.estado_pago] ?? 99
       const pagoB = ordenPagoContrato[b.estado_pago] ?? 99
       if (pagoA !== pagoB) return pagoA - pagoB
@@ -354,8 +389,6 @@ function estadoContratoStyle(estado) {
   const m = {
     ACTIVO: 'background:#fee2e2; color:#991b1b;',
     FINALIZADO: 'background:#dcfce7; color:#166534;',
-    VENCIDO: 'background:#fef3c7; color:#92400e;',
-    PENDIENTE: 'background:#f3f4f6; color:#6b7280;',
     ANULADO: 'background:#f3f4f6; color:#9ca3af;',
   }
   return m[estado] || 'background:#f3f4f6; color:#6b7280;'
@@ -379,6 +412,70 @@ async function verContrato(c) {
     Swal.fire({ icon: 'error', title: 'Error', text: e.response?.data?.message || 'No se pudo cargar el contrato.', confirmButtonColor: '#922b21' })
   } finally {
     cargandoPdf.value = null
+  }
+}
+
+async function anularContrato(c) {
+  const { value: motivo, isConfirmed } = await Swal.fire({
+    icon: 'warning',
+    title: `¿Anular contrato ${c.numero_contrato}?`,
+    html: 'El vehículo se libera y, si viene de una reserva, la reserva vuelve a <strong>Pendiente</strong>.<br><small>Primero deben cancelarse los pagos y anularse los cargos e incidencias vigentes.</small>',
+    input: 'textarea',
+    inputPlaceholder: 'Motivo de la anulación',
+    inputAttributes: { maxlength: 500 },
+    inputValidator: (v) => (!v || !v.trim() ? 'Debe indicar el motivo de la anulación.' : undefined),
+    showCancelButton: true,
+    confirmButtonText: 'Anular contrato',
+    cancelButtonText: 'Volver',
+    confirmButtonColor: '#922b21',
+    cancelButtonColor: '#6b7280',
+    background: isDark.value ? '#1f2937' : '#fff',
+    color: isDark.value ? '#f3f4f6' : '#111827',
+  })
+  if (!isConfirmed) return
+  anulando.value = c.id
+  try {
+    await store.anular(c.id, motivo.trim())
+    toastSuccess('Contrato anulado', c.numero_contrato)
+  } catch (e) {
+    const errores = Object.values(e.response?.data?.errors || {}).flat().join(' ')
+    Swal.fire({
+      icon: 'error',
+      title: 'No se pudo anular',
+      text: errores || e.response?.data?.message || 'Error al anular el contrato.',
+      confirmButtonColor: '#922b21',
+    })
+  } finally {
+    anulando.value = null
+  }
+}
+
+async function abrirCambioVehiculo(c) {
+  erroresCambio.value = {}
+  errorCambio.value = ''
+  try {
+    // el detalle trae cliente y combustible
+    contratoCambio.value = await store.fetchContrato(c.id)
+  } catch (e) {
+    Swal.fire({ icon: 'error', title: 'Error', text: e.response?.data?.message || 'No se pudo cargar el contrato.', confirmButtonColor: '#922b21' })
+  }
+}
+
+async function confirmarCambioVehiculo(datos) {
+  if (!contratoCambio.value) return
+  cambiandoVehiculo.value = true
+  erroresCambio.value = {}
+  errorCambio.value = ''
+  try {
+    const actualizado = await store.cambiarVehiculo(contratoCambio.value.id, datos)
+    contratoCambio.value = null
+    toastSuccess('Vehículo cambiado', `${actualizado.numero_contrato} · ${actualizado.vehiculo?.placa || ''}`)
+    await store.fetchContratos()
+  } catch (e) {
+    erroresCambio.value = e.response?.data?.errors || {}
+    errorCambio.value = e.response?.data?.errors ? '' : (e.response?.data?.message || 'No se pudo cambiar el vehículo.')
+  } finally {
+    cambiandoVehiculo.value = false
   }
 }
 

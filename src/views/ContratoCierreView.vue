@@ -130,21 +130,16 @@
                   <input v-model="aplicarCargoRetraso" :disabled="operacionEnCurso" type="checkbox" />
                   <span>Aplicar cargo por retraso al cierre</span>
                 </label>
-                <input
-                  v-if="aplicarCargoRetraso && !yaTieneCargoRetraso"
-                  v-model.number="montoRetraso"
-                  :disabled="operacionEnCurso"
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  class="cierre-input cierre-input--sm cierre-input--amount mt-2"
-                />
+                <p v-if="aplicarCargoRetraso && !yaTieneCargoRetraso" class="cierre-helper mt-2 mb-0">
+                  Cargo: {{ horasRetraso }} h × ${{ formatPrecio(TARIFA_RETRASO_HORA) }} =
+                  <strong>${{ formatPrecio(montoRetraso) }}</strong>
+                </p>
                 <p v-if="aplicarCargoRetraso && !yaTieneCargoRetraso && !cerrarConDeuda" class="cierre-helper mt-2 mb-0">
-                  Al cerrar, Laravel registra este cargo y deja el contrato con saldo pendiente: habrá que cobrarlo
+                  Al cerrar se registra este cargo y el contrato queda con saldo pendiente: habrá que cobrarlo
                   y volver a cerrar.
                 </p>
                 <p v-if="aplicarCargoRetraso && !yaTieneCargoRetraso && cerrarConDeuda" class="cierre-helper mt-2 mb-0">
-                  En un cierre con deuda Laravel no registra el cargo por retraso.
+                  En el cierre con deuda el cargo por retraso se suma a la deuda registrada.
                 </p>
               </div>
             </div>
@@ -515,7 +510,8 @@ const cargosRegistrados = ref([]);
 const incidencias = ref([]);
 const incidenciasRegistradas = ref([]);
 const aplicarCargoRetraso = ref(false);
-const montoRetraso = ref(15);
+// misma tarifa que usa el back
+const TARIFA_RETRASO_HORA = 5;
 const cerrarConDeuda = ref(false);
 const motivoCierreDeuda = ref("");
 const ahora = ref(Date.now());
@@ -547,9 +543,13 @@ const horasRetraso = computed(() => {
   if (!Number.isFinite(devolucion)) return 0;
   const limite = devolucion + 2 * 3600000;
   if (ahora.value <= limite) return 0;
-  return Math.max(0, Math.floor((ahora.value - devolucion) / 3600000));
+  // despues de las 2h de margen se cobran todas las horas, redondeado hacia arriba
+  return Math.max(0, Math.ceil((ahora.value - devolucion) / 3600000));
 });
-const yaTieneCargoRetraso = computed(() => cargosRegistrados.value.some((c) => c.tipo_cargo === "RETRASO"));
+const montoRetraso = computed(() => horasRetraso.value * TARIFA_RETRASO_HORA);
+const yaTieneCargoRetraso = computed(() =>
+  cargosRegistrados.value.some((c) => c.tipo_cargo === "RETRASO" && c.estado_cargo !== "ANULADO"),
+);
 
 const totalExtras = computed(() => cargosValidos().reduce((s, c) => s + Number(c.monto || 0), 0));
 const tieneCargosSinGuardar = computed(() => cargos.value.length > 0);
@@ -585,7 +585,7 @@ const aplicaRetrasoAlCerrar = computed(() =>
   aplicarCargoRetraso.value && horasRetraso.value > 0 && !yaTieneCargoRetraso.value,
 );
 const montoRetrasoPrevisto = computed(() =>
-  aplicaRetrasoAlCerrar.value && !cerrarConDeuda.value ? Number(montoRetraso.value || 0) : 0,
+  aplicaRetrasoAlCerrar.value ? montoRetraso.value : 0,
 );
 const totalPrevisto = computed(() =>
   totalExtras.value + totalIncidenciasClientePorRegistrar.value + montoRetrasoPrevisto.value,
@@ -619,9 +619,6 @@ const mensajeBloqueoCierre = computed(() => {
   }
   if (saldoActual.value > 0 || contrato.value.estado_pago !== "PAGADO")
     return "Hay saldo pendiente: cóbralo o marca \"Cerrar con deuda pendiente\".";
-  if (aplicaRetrasoAlCerrar.value && (!montoRetraso.value || Number(montoRetraso.value) <= 0)) {
-    return "Indica un monto válido para el cargo por retraso.";
-  }
   return "";
 });
 
@@ -1173,7 +1170,7 @@ async function cerrarRenta() {
     const { isConfirmed } = await Swal.fire({
       icon: "warning",
       title: "¿Cerrar con deuda pendiente?",
-      html: `El contrato quedará <strong>finalizado con deuda</strong> de <strong>$${formatPrecio(saldoActual.value)}</strong> y el vehículo se liberará.<br><br><small>Motivo: ${escaparHtml(motivoCierreDeuda.value)}</small>`,
+      html: `El contrato quedará <strong>finalizado con deuda</strong> de <strong>$${formatPrecio(saldoPendiente.value)}</strong> y el vehículo se liberará.<br><br><small>Motivo: ${escaparHtml(motivoCierreDeuda.value)}</small>`,
       showCancelButton: true,
       confirmButtonText: "Cerrar con deuda",
       cancelButtonText: "Volver",
@@ -1182,7 +1179,6 @@ async function cerrarRenta() {
     });
     if (!isConfirmed) return;
   }
-  const conRetraso = aplicaRetrasoAlCerrar.value && !conDeuda;
   cerrando.value = true;
   try {
     const payload = {
@@ -1190,29 +1186,32 @@ async function cerrarRenta() {
       nivel_combustible_recepcion: nivelRecepcion.value,
       estado_vehiculo_recepcion: "RECIBIDO",
       observaciones: observacionesRecepcion.value || null,
-      aplicar_cargo_retraso: conRetraso,
+      aplicar_cargo_retraso: aplicaRetrasoAlCerrar.value,
     };
-    if (conRetraso) {
-      payload.monto_retraso = Number(montoRetraso.value);
-    }
     if (conDeuda) {
       payload.forzar_cierre_con_deuda = true;
       payload.motivo_cierre_deuda = motivoCierreDeuda.value;
     }
-    await store.cerrarRenta(contrato.value.id, payload);
+    const respuesta = await store.cerrarRenta(contrato.value.id, payload);
+    if (!respuesta.cierre_completado) {
+      // se registro el cargo de retraso pero quedo saldo, no se cerro
+      aplicarCargoRetraso.value = false;
+      cerrando.value = false;
+      await recargarDatosContrato();
+      await Swal.fire({
+        icon: "info",
+        title: "Cargo por retraso registrado",
+        text: respuesta.message,
+        confirmButtonColor: "#922b21",
+      });
+      return;
+    }
     toastSuccess(conDeuda ? "Renta cerrada con deuda" : "Renta cerrada", "Vehículo liberado.");
     cerrando.value = false;
     salidaConfirmada.value = true;
     await router.push({ name: "contratos" });
   } catch (e) {
     const mensaje = mensajeErrorOriginal(e) || store.error || "No se pudo cerrar la renta.";
-    if (conRetraso && e.response?.status === 422 && /cargo por retraso/i.test(e.response?.data?.message || "")) {
-      aplicarCargoRetraso.value = false;
-      cerrando.value = false;
-      await recargarDatosContrato();
-      await Swal.fire({ icon: "info", title: "Cargo por retraso registrado", text: mensaje, confirmButtonColor: "#922b21" });
-      return;
-    }
     Swal.fire({
       icon: "error",
       title: "Error",

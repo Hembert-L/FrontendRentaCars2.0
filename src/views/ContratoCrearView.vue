@@ -63,9 +63,7 @@
             <ContratoFechasVehiculoSection
               v-else-if="paso === 2"
               v-model:fecha-entrega="fechaEntrega"
-              v-model:hora-entrega="horaEntrega"
               v-model:fecha-devolucion="fechaDevolucion"
-              v-model:hora-devolucion="horaDevolucion"
               v-model:vehiculo-id="vehiculoId"
               :vehiculos="vehiculos"
               :cargando="cargandoVehiculos"
@@ -122,9 +120,7 @@
       <ContratoResumen
         :cliente="cliente"
         :fecha-entrega="fechaEntrega"
-        :hora-entrega="esDesdeReserva ? '' : horaEntrega"
         :fecha-devolucion="fechaDevolucion"
-        :hora-devolucion="esDesdeReserva ? '' : horaDevolucion"
         :vehiculo="vehiculoSel"
         :dias="dias"
         :total-estimado="totalEstimado"
@@ -175,9 +171,7 @@ const wizardMainRef = ref(null)
 const paso = ref(1)
 const cliente = ref(null)
 const fechaEntrega = ref('')
-const horaEntrega = ref('06:00')
 const fechaDevolucion = ref('')
-const horaDevolucion = ref('18:00')
 const vehiculoId = ref('')
 const vehiculos = ref([])
 const cargandoVehiculos = ref(false)
@@ -524,8 +518,8 @@ async function generarContrato() {
     }
     if (reservaId.value) {
       payload.reserva_id = reservaId.value
+      // la devolucion la calcula el back con los dias de la reserva
       payload.fecha_hora_entrega = `${fechaSolo(reservaOrigen.value?.fecha_inicio) || fechaEntrega.value} 00:00:00`
-      payload.fecha_hora_devolucion = `${fechaSolo(reservaOrigen.value?.fecha_fin) || fechaDevolucion.value} 00:00:00`
     } else {
       payload.dias_acordados = dias.value
     }

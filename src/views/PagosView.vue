@@ -24,7 +24,7 @@
         >
           <option value="">Seleccionar contrato...</option>
           <option v-for="c in contratosAbiertos" :key="c.id" :value="c.id">
-            {{ c.numero_contrato }} — {{ nombreCliente(c) }} — {{ saldoLabel(c) }}
+            {{ c.numero_contrato }} — {{ nombreCliente(c) }} — {{ saldoLabel(c) }}{{ esDeudaPostCierre(c) ? ' — deuda (renta cerrada)' : '' }}
           </option>
         </select>
       </div>
@@ -34,7 +34,10 @@
         :class="isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-100 bg-gray-50'"
       >
         <div v-if="montoExtrasSel > 0" class="text-xs opacity-60 mb-0.5">
-          Renta ${{ formatPrecio(contratoSel.monto_total_renta) }} + extras ${{ formatPrecio(montoExtrasSel) }}
+          Total ${{ formatPrecio(contratoSel.monto_total_renta) }} (incluye ${{ formatPrecio(montoExtrasSel) }} en extras)
+        </div>
+        <div v-if="esDeudaPostCierre(contratoSel)" class="text-xs font-semibold mb-0.5" style="color:#b45309;">
+          Renta cerrada con deuda: el pago abona a la deuda pendiente
         </div>
         <span class="opacity-60">Saldo: </span>
         <strong style="color:#922b21;">${{ formatPrecio(saldoContrato) }}</strong>
@@ -296,13 +299,18 @@ const motivosCancelacionOptions = Object.fromEntries(
 
 const cargandoVista = computed(() => cargandoInicial.value || pagosStore.loading)
 
+// activos o finalizados con deuda que aun no esten pagados
 const contratosAbiertos = computed(() =>
   contratosStore.contratos.filter((c) =>
-    c.estado_contrato === 'ACTIVO' &&
+    ['ACTIVO', 'FINALIZADO'].includes(c.estado_contrato) &&
     c.estado_pago !== 'PAGADO' &&
     saldoPendienteContrato(c) > 0
   )
 )
+
+function esDeudaPostCierre(c) {
+  return c?.estado_contrato === 'FINALIZADO' && c?.estado_pago !== 'PAGADO'
+}
 
 const saldoContrato = computed(() => saldoPendienteContrato(contratoSel.value))
 const montoExtrasSel = computed(() => montoExtrasContrato(contratoSel.value))

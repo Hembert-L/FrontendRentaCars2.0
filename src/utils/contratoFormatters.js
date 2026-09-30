@@ -152,7 +152,7 @@ export function badgeEstadoContrato(estado, isDark = false) {
 }
 
 export function metodoPagoIcon(metodo) {
-  const m = { EFECTIVO: 'pi-wallet', TRANSFERENCIA: 'pi-building', TARJETA: 'pi-credit-card' }
+  const m = { EFECTIVO: 'pi-wallet', TRANSFERENCIA: 'pi-building', DEPOSITO: 'pi-inbox' }
   return m[metodo] || 'pi-dollar'
 }
 
@@ -172,14 +172,12 @@ export function nivelCombustiblePct(valor) {
   return NIVELES_COMBUSTIBLE.find((n) => n.value === nivel)?.pct ?? 0
 }
 
-const ESTADOS_CARGO_COBRABLE = ['PENDIENTE', 'APLICADO']
-
+// solo para mostrar, el back ya los suma en monto_total_renta
 export function montoExtrasContrato(contrato) {
   if (!contrato) return 0
-  if (contrato.monto_extras != null) return toMoneyNumber(contrato.monto_extras)
   const cargos = contrato.cargos_adicionales || contrato.cargosAdicionales || []
   return centsToMoney(cargos
-    .filter((c) => ESTADOS_CARGO_COBRABLE.includes(c.estado_cargo))
+    .filter((c) => c.estado_cargo !== 'ANULADO')
     .reduce((s, c) => s + moneyCents(c.monto), 0))
 }
 
@@ -192,14 +190,13 @@ export function montoPagadoContrato(contrato) {
     .reduce((s, p) => s + moneyCents(p.monto), 0))
 }
 
+// ya incluye cargos e incidencias del cliente
 export function totalFinalContrato(contrato) {
   if (!contrato) return 0
-  if (contrato.total_final != null) return toMoneyNumber(contrato.total_final)
-  return centsToMoney(moneyCents(contrato.monto_total_renta) + moneyCents(montoExtrasContrato(contrato)))
+  return toMoneyNumber(contrato.monto_total_renta)
 }
 
 export function saldoPendienteContrato(contrato) {
   if (!contrato) return 0
-  if (contrato.saldo_pendiente != null) return toMoneyNumber(contrato.saldo_pendiente)
   return centsToMoney(Math.max(0, moneyCents(totalFinalContrato(contrato)) - moneyCents(montoPagadoContrato(contrato))))
 }

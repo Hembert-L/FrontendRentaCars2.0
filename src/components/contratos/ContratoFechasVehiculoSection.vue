@@ -3,8 +3,8 @@
     <label class="field-label">{{ modoDirecto ? 'Vehículo y duración' : 'Fechas, horarios y vehículo' }}</label>
     <p class="text-xs mb-2 -mt-2" :class="isDark ? 'text-gray-500' : 'text-gray-400'">
       {{ modoDirecto
-        ? 'El contrato inicia hoy. Selecciona la fecha de devolución para calcular los días acordados.'
-        : 'Horarios permitidos: 6:00-7:00 AM y 6:00-7:00 PM. Los vehículos se consultan al elegir fechas.' }}
+        ? 'El contrato inicia en el momento de generarlo. Selecciona la fecha de devolución para calcular los días acordados.'
+        : 'La entrega se registra el día de inicio de la reserva y la devolución se calcula con los días reservados.' }}
     </p>
 
     <p v-if="bloqueado" class="text-xs mb-2 -mt-1 rounded-xl p-3 border font-semibold" :class="isDark ? 'text-amber-300 bg-amber-950/30 border-amber-900/40' : 'text-amber-700 bg-amber-50 border-amber-100'">
@@ -20,24 +20,12 @@
           <input :value="fechaEntrega" type="date" :min="bloqueado ? undefined : hoy" :disabled="bloqueado" class="field-input" @input="$emit('update:fechaEntrega', $event.target.value)" />
         </div>
       </div>
-      <div v-if="!modoDirecto && !bloqueado">
-        <label class="text-xs font-semibold mb-1 block" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Entrega - hora</label>
-        <select :value="horaEntrega" class="field-input field-input--plain" @change="$emit('update:horaEntrega', $event.target.value)">
-          <option v-for="op in HORAS_PERMITIDAS_OPCIONES" :key="'e' + op.value" :value="op.value">{{ op.label }}</option>
-        </select>
-      </div>
       <div :class="modoDirecto ? 'sm:col-span-2' : ''">
         <label class="text-xs font-semibold mb-1 block" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Devolución - fecha</label>
         <div class="relative">
           <i class="pi pi-calendar input-icon"></i>
           <input :value="fechaDevolucion" type="date" :min="bloqueado ? undefined : minFechaDevolucion" :disabled="bloqueado" class="field-input" @input="$emit('update:fechaDevolucion', $event.target.value)" />
         </div>
-      </div>
-      <div v-if="!modoDirecto && !bloqueado">
-        <label class="text-xs font-semibold mb-1 block" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Devolución - hora</label>
-        <select :value="horaDevolucion" class="field-input field-input--plain" @change="$emit('update:horaDevolucion', $event.target.value)">
-          <option v-for="op in HORAS_PERMITIDAS_OPCIONES" :key="'d' + op.value" :value="op.value">{{ op.label }}</option>
-        </select>
       </div>
     </div>
 
@@ -143,13 +131,11 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useAppTheme } from '@/composables/useAppTheme'
-import { HORAS_PERMITIDAS_OPCIONES, nombreVehiculo, formatPrecio } from '@/utils/contratoFormatters'
+import { nombreVehiculo, formatPrecio } from '@/utils/contratoFormatters'
 
 const props = defineProps({
   fechaEntrega:    { type: String, default: '' },
-  horaEntrega:     { type: String, default: '06:00' },
   fechaDevolucion: { type: String, default: '' },
-  horaDevolucion:  { type: String, default: '18:00' },
   vehiculoId:      { type: [String, Number], default: '' },
   vehiculos:       { type: Array, default: () => [] },
   cargando:        { type: Boolean, default: false },
@@ -158,7 +144,7 @@ const props = defineProps({
   bloqueado:       { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['update:fechaEntrega', 'update:horaEntrega', 'update:fechaDevolucion', 'update:horaDevolucion', 'update:vehiculoId'])
+const emit = defineEmits(['update:fechaEntrega', 'update:fechaDevolucion', 'update:vehiculoId'])
 
 const { isDark } = useAppTheme()
 const hoy = new Date().toISOString().split('T')[0]

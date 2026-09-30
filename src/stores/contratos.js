@@ -63,15 +63,21 @@ export const useContratosStore = defineStore('contratos', () => {
       contrato_id: contratoId,
       ...form,
     })
+    // si hubo retraso y queda saldo el back responde 200 pero no cierra
+    const cierreCompletado = res.data?.cierre_completado !== false
     const idx = contratos.value.findIndex((c) => c.id === Number(contratoId))
-    if (idx !== -1) {
+    if (cierreCompletado && idx !== -1) {
       contratos.value[idx] = {
         ...contratos.value[idx],
         estado_contrato: 'FINALIZADO',
         cierre_renta: res.data.data,
       }
     }
-    return res.data.data
+    return {
+      cierre_completado: cierreCompletado,
+      message: res.data?.message,
+      data: res.data?.data,
+    }
   }
 
   async function enviarSecuencia(endpoint, elementos, alConfirmar) {
@@ -139,6 +145,22 @@ export const useContratosStore = defineStore('contratos', () => {
     return res.data.data
   }
 
+  // solo admin, y el contrato no debe tener pagos, cargos ni incidencias
+  async function anular(id, motivo) {
+    const res = await api.patch(`/admin/contratos/${id}/anular`, { motivo })
+    const idx = contratos.value.findIndex((c) => c.id === Number(id))
+    if (idx !== -1) contratos.value[idx] = { ...contratos.value[idx], ...res.data.data }
+    return res.data.data
+  }
+
+  // el precio no cambia, el carro anterior pasa a en proceso
+  async function cambiarVehiculo(id, datos) {
+    const res = await api.post(`/admin/contratos/${id}/cambiar-vehiculo`, datos)
+    const idx = contratos.value.findIndex((c) => c.id === Number(id))
+    if (idx !== -1) contratos.value[idx] = { ...contratos.value[idx], ...res.data.data }
+    return res.data.data
+  }
+
   return {
     contratos,
     loading,
@@ -155,5 +177,7 @@ export const useContratosStore = defineStore('contratos', () => {
     eliminarCargo,
     actualizarIncidencia,
     anularIncidencia,
+    anular,
+    cambiarVehiculo,
   }
 })
