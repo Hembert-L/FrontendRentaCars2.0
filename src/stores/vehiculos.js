@@ -8,7 +8,8 @@ function extraerListaApi(payload) {
 }
 
 function limpiarPayloadVehiculo(form) {
-  const { estado, ...payload } = form || {}
+  const payload = { ...form }
+  delete payload.estado
   return payload
 }
 

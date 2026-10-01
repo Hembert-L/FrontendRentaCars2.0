@@ -1,9 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap');
 
-/* Estilo cuadrado: cambiando estos valores se ajustan todas las esquinas de la app. */
 :root {
-  --radio-control: 4px;  /* campos de texto, selects, botones y etiquetas */
-  --radio-tarjeta: 6px;  /* tarjetas, tablas, modales y avisos */
+  --radio-control: 4px;
+  --radio-tarjeta: 6px;
 }
 
 /* 1. Definimos el orden */
@@ -27,7 +26,6 @@
   @tailwind utilities;
 }
 
-/* Fuente global. Con prioridad cero: los íconos y los textos monoespaciados (placas) conservan la suya. */
 * {
   font-family: 'Montserrat', sans-serif;
 }
@@ -155,7 +153,6 @@ table {
   border-spacing: 0;
 }
 
-/* Esquinas cuadradas. Los círculos (avatares, interruptores) usan rounded-full y no se tocan. */
 .rounded-3xl,
 .rounded-2xl {
   border-radius: var(--radio-tarjeta) !important;
@@ -167,14 +164,12 @@ table {
   border-radius: var(--radio-control) !important;
 }
 
-/* campos de texto, selects y áreas de texto (incluye los estilos propios de cada pantalla) */
 input:not([type='checkbox']):not([type='radio']):not([type='range']),
 select,
 textarea {
   border-radius: var(--radio-control) !important;
 }
 
-/* botones con texto de las pantallas y de las alertas */
 .wizard-btn,
 .wizard-back,
 .cierre-btn,
@@ -194,7 +189,6 @@ textarea {
   border-radius: var(--radio-control) !important;
 }
 
-/* tarjetas y modales con estilos propios */
 .swal2-popup,
 .cierre-card,
 .cierre-ticket,
@@ -372,7 +366,6 @@ span.rounded-full.font-bold.text-\[10px\]:not([class*='h-'])::before {
   transform: translateY(-50%);
 }
 
-/* Badge de roles (Usuarios): etiqueta cuadrada con icono y franja lateral. */
 .rol-badge {
   display: inline-flex;
   align-items: center;

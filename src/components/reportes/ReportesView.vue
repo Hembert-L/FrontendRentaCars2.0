@@ -225,7 +225,7 @@ const reportes = [
   {
     id: 'desempeno-general',
     titulo: 'Desempeño general',
-    descripcion: 'Resumen ejecutivo de ingresos, contratos, ocupación de flota, clientes nuevos y gastos por incidencias asumidas por el negocio.',
+    descripcion: 'Resumen ejecutivo de ingresos, contratos, ocupación de flota, clientes nuevos y gastos del negocio (incidencias y mantenimientos).',
     icono: 'pi-chart-line',
     endpoint: '/admin/reportes/desempeno-general',
     needsPeriod: true,
@@ -273,7 +273,7 @@ const reportes = [
   {
     id: 'gastos-por-vehiculo',
     titulo: 'Gastos por vehículo',
-    descripcion: 'Costo de las incidencias asumidas por el negocio, agrupado por vehículo. No incluye mantenimientos.',
+    descripcion: 'Gastos del negocio por vehículo: incidencias asumidas por el negocio y mantenimientos.',
     icono: 'pi-wrench',
     endpoint: '/admin/reportes/gastos-por-vehiculo',
     needsPeriod: true,
@@ -281,7 +281,7 @@ const reportes = [
   {
     id: 'resultado-neto-por-vehiculo',
     titulo: 'Resultado neto por vehículo',
-    descripcion: 'Comparativo por vehículo de ingresos confirmados, gastos por incidencias del negocio y resultado neto.',
+    descripcion: 'Comparativo por vehículo de ingresos confirmados, gastos (incidencias del negocio y mantenimientos) y resultado neto.',
     icono: 'pi-chart-pie',
     endpoint: '/admin/reportes/resultado-neto-por-vehiculo',
     needsPeriod: true,
@@ -289,7 +289,7 @@ const reportes = [
   {
     id: 'resultado-neto-por-propietario',
     titulo: 'Resultado neto por propietario',
-    descripcion: 'Ingresos, gastos por incidencias del negocio y resultado neto agrupados por propietario de vehículos.',
+    descripcion: 'Ingresos, gastos (incidencias del negocio y mantenimientos) y resultado neto agrupados por propietario.',
     icono: 'pi-wallet',
     endpoint: '/admin/reportes/resultado-neto-por-propietario',
     needsPeriod: true,
@@ -428,7 +428,6 @@ function paramsReporte(reporte) {
   }
 
   if (reporte.needsDias) params.dias = filtros.dias
-  // propietario_id filtra exacto (el filtro por nombre del backend es parcial).
   if (reporte.needsPropietario && filtros.propietarioId) params.propietario_id = filtros.propietarioId
   if (reporte.needsPorcentaje && Number(filtros.porcentajeAdmin) > 0) {
     params.porcentaje_administracion = Number(filtros.porcentajeAdmin)

@@ -46,6 +46,17 @@
               {{ contrato.observaciones_entrega || "Sin observaciones registradas en la entrega." }}
             </div>
           </div>
+          <div class="cierre-field">
+            <label>Estado y observaciones al recibir</label>
+            <textarea
+              v-model="observacionesRecepcion"
+              :disabled="operacionEnCurso"
+              rows="3"
+              maxlength="500"
+              class="cierre-input"
+              placeholder="Rayones, golpes, limpieza u otros detalles..."
+            ></textarea>
+          </div>
         </section>
 
         <div class="cierre-grid-2">
@@ -291,8 +302,8 @@
           </div>
           <p v-if="hayDanioMecanicoPorRegistrar" class="cierre-warning">
             <i class="pi pi-exclamation-triangle"></i>
-            Al guardar un daño mecánico, el vehículo pasa a estado <strong>EN PROCESO</strong>. Ojo: al cerrar la
-            renta, el sistema lo vuelve a marcar DISPONIBLE; registra su mantenimiento antes de volver a rentarlo.
+            Hay un daño mecánico: al cerrar la renta el vehículo quedará en <strong>EN PROCESO</strong> y no se
+            podrá rentar hasta que se registre y finalice su mantenimiento.
           </p>
           <div v-if="!incidenciasRegistradas.length && !incidencias.length" class="cierre-empty-cargos">Sin incidencias registradas</div>
           <div v-for="(incidencia, i) in incidencias" :key="i" class="cierre-incidencia-row">
@@ -498,7 +509,8 @@ const cargos = ref([]);
 const cargosRegistrados = ref([]);
 const incidencias = ref([]);
 const incidenciasRegistradas = ref([]);
-const aplicarCargoRetraso = ref(false);
+const aplicarCargoRetraso = ref(true);
+const observacionesRecepcion = ref("");
 // misma tarifa que usa el back
 const TARIFA_RETRASO_HORA = 5;
 const cerrarConDeuda = ref(false);
@@ -1091,7 +1103,7 @@ async function editarIncidenciaRegistrada(incidencia) {
     await Swal.fire({
       icon: "info",
       title: "Revisa el estado del vehículo",
-      text: "Cambiar la incidencia a daño mecánico no pone el vehículo EN PROCESO automáticamente. Si necesita reparación, regístralo en Mantenimiento.",
+      text: "Con un daño mecánico, al cerrar la renta el vehículo quedará EN PROCESO hasta que se registre y finalice su mantenimiento.",
       confirmButtonColor: "#922b21",
     });
   }
@@ -1174,6 +1186,7 @@ async function cerrarRenta() {
       fecha_hora_recepcion: fechaHoraActualApi(),
       nivel_combustible_recepcion: nivelRecepcion.value,
       estado_vehiculo_recepcion: "RECIBIDO",
+      observaciones: observacionesRecepcion.value.trim() || null,
       aplicar_cargo_retraso: aplicaRetrasoAlCerrar.value,
     };
     if (conDeuda) {

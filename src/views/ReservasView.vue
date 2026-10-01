@@ -612,7 +612,6 @@ function tipoStyle(tipo) {
 </script>
 
 <style scoped>
-/* Acciones apiladas: una debajo de otra, todas del mismo ancho y alineadas a la izquierda. */
 .acciones-piramide,
 .acciones-piramide__top {
   display: flex;

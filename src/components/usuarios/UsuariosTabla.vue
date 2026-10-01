@@ -237,7 +237,6 @@ function rolIcon(rol) {
 
 function estadoStyle(estado) {
   const map = {
-    // background-color (no `background`) para no borrar la flecha del selector
     'ACTIVO':    'background-color:#dcfce7; color:#166534;',
     'INACTIVO':  'background-color:#fee2e2; color:#991b1b;',
     'BLOQUEADO': 'background-color:#fef9c3; color:#854d0e;',
@@ -305,7 +304,6 @@ function labelEstado(estado) {
   font-weight: 700;
 }
 
-/* Selector de estado con el mismo aspecto que las etiquetas de estado: punto de color + texto (ver main.css). */
 .estado-select {
   appearance: none;
   padding: 0.15rem 1.1rem 0.15rem 0.85rem;
@@ -315,7 +313,6 @@ function labelEstado(estado) {
   font-weight: 600;
   cursor: pointer;
   outline: none;
-  /* punto a la izquierda y flecha a la derecha, ambos del color del estado */
   background-image: radial-gradient(circle, currentColor 0.2rem, transparent 0.23rem),
     linear-gradient(45deg, transparent 50%, currentColor 50%),
     linear-gradient(135deg, currentColor 50%, transparent 50%);
