@@ -5,7 +5,6 @@
         v-if="visible"
         class="fixed inset-0 z-[80] flex items-center justify-center p-4"
         style="background:rgba(0,0,0,0.45);"
-        @click.self.stop="$emit('cerrar')"
       >
         <div
           class="rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
@@ -51,6 +50,12 @@
                 :placeholder="config.placeholder"
               />
               <p v-if="errors.nombre" class="field-error">{{ errors.nombre }}</p>
+            </div>
+
+            <div v-if="tipo === 'modelo'">
+              <label class="field-label">Máximo de pasajeros</label>
+              <input v-model="form.capacidad_maxima" type="number" min="1" max="15" step="1" class="field-input" :class="inputClass(errors.capacidad_maxima)" placeholder="5" />
+              <p v-if="errors.capacidad_maxima" class="field-error">{{ errors.capacidad_maxima }}</p>
             </div>
 
             <div v-if="tipo === 'categoria'">
@@ -129,8 +134,8 @@ const marcas = ref([])
 const categoriasExistentes = ref([])
 const modelosExistentes = ref([])
 const propietariosExistentes = ref([])
-const form = reactive({ nombre: '', precio_dia: '', marca_id: '', telefono: '', pais_telefono: CODIGO_PAIS_DEFAULT, tipo_propietario: '' })
-const errors = reactive({ nombre: '', precio_dia: '', marca_id: '', telefono: '', tipo_propietario: '' })
+const form = reactive({ nombre: '', precio_dia: '', marca_id: '', capacidad_maxima: '', telefono: '', pais_telefono: CODIGO_PAIS_DEFAULT, tipo_propietario: '' })
+const errors = reactive({ nombre: '', precio_dia: '', marca_id: '', capacidad_maxima: '', telefono: '', tipo_propietario: '' })
 const nombreFlexibleRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 ./'-]+$/
 const nombrePersonaRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ '-]+$/
 const contieneLetraRegex = /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/
@@ -251,6 +256,7 @@ watch(
     form.nombre = ''
     form.precio_dia = ''
     form.marca_id = ''
+    form.capacidad_maxima = ''
     form.telefono = ''
     form.pais_telefono = CODIGO_PAIS_DEFAULT
     form.tipo_propietario = ''
@@ -330,6 +336,13 @@ function validar() {
     errors.nombre = 'Ya existe un modelo con ese nombre para la marca seleccionada.'
     ok = false
   }
+  if (props.tipo === 'modelo') {
+    const capacidad = Number(form.capacidad_maxima)
+    if (!form.capacidad_maxima || !Number.isInteger(capacidad) || capacidad < 1 || capacidad > 15) {
+      errors.capacidad_maxima = 'Indica un número entero de pasajeros entre 1 y 15.'
+      ok = false
+    }
+  }
   if (props.tipo === 'propietario') {
     const pais = buscarPaisTelefono(form.pais_telefono)
     const telefonoError = validarTelefonoPais(form.telefono, pais)
@@ -367,7 +380,7 @@ async function handleGuardar() {
     } else if (props.tipo === 'categoria') {
       res = await api.post('/admin/categorias', { nombre, precio_dia: Number(form.precio_dia) })
     } else if (props.tipo === 'modelo') {
-      res = await api.post('/admin/modelos', { nombre, marca_id: Number(form.marca_id) })
+      res = await api.post('/admin/modelos', { nombre, marca_id: Number(form.marca_id), capacidad_maxima: Number(form.capacidad_maxima) })
     } else if (props.tipo === 'propietario') {
       const payload = {
         nombre,

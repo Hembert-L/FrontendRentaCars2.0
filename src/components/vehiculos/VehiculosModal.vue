@@ -4,7 +4,6 @@
       <div
         v-if="visible"
         class="veh-modal-backdrop fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-4"
-        @click.self.stop="$emit('cerrar')"
       >
         <div class="veh-modal-shell w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden" @click.stop>
           <!-- Header -->
@@ -108,11 +107,12 @@
                         v-model="form.capacidad_pasajeros"
                         type="number"
                         min="1"
-                        max="255"
+                        :max="capacidadMaximaModelo || 255"
                         class="veh-input"
                         :class="{ 'veh-input--error': errors.capacidad_pasajeros }"
                       />
                       <p v-if="errors.capacidad_pasajeros" class="veh-error">{{ errors.capacidad_pasajeros }}</p>
+                      <p v-else-if="capacidadMaximaModelo" class="veh-hint">Máximo {{ capacidadMaximaModelo }} según el modelo</p>
                     </div>
                   </div>
 
@@ -181,8 +181,8 @@
                   <div class="veh-field">
                     <label>Categoría</label>
                     <p v-if="modoEdicion" class="veh-cat-hint">
-                      <i class="pi pi-lock text-[10px]"></i>
-                      La categoría queda fija al registrar el vehículo (ej. Sedán, SUV).
+                      <i class="pi pi-info-circle text-[10px]"></i>
+                      Cambiar la categoría no cambia el precio de los contratos ya creados.
                     </p>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <button
@@ -190,15 +190,10 @@
                         :key="c.id"
                         type="button"
                         class="veh-cat-card"
-                        :class="{
-                          'veh-cat-card--active': form.categoria_id == c.id,
-                          'veh-cat-card--locked': modoEdicion && c.id != categoriaOriginalId,
-                        }"
-                        :disabled="modoEdicion && c.id != categoriaOriginalId"
+                        :class="{ 'veh-cat-card--active': form.categoria_id == c.id }"
                         @click="seleccionarCategoria(c.id)"
                       >
                         <span class="font-bold text-sm flex items-center gap-1.5">
-                          <i v-if="modoEdicion && c.id == categoriaOriginalId" class="pi pi-lock text-[10px] opacity-80"></i>
                           {{ c.nombre }}
                         </span>
                         <span class="text-xs opacity-75">${{ Number(c.precio_dia).toFixed(2) }}/día</span>
@@ -356,7 +351,6 @@ const loading = ref(false)
 const globalError = ref('')
 const marcaId = ref('')
 const modelos = ref([])
-const categoriaOriginalId = ref(null)
 const bloquearMarcaWatch = ref(false)
 const tipoPropietario = ref('TERCERO')
 const busquedaPropietario = ref('')
@@ -364,6 +358,12 @@ const busquedaPropietario = ref('')
 const modelosDisponibles = computed(() => {
   if (!marcaId.value) return modelos.value
   return modelosPorMarca.value[String(marcaId.value)] ?? modelos.value
+})
+
+// Capacidad máxima de pasajeros del modelo seleccionado (null si aún no hay modelo)
+const capacidadMaximaModelo = computed(() => {
+  const mod = modelosDisponibles.value.find((m) => m.id == form.modelo_id)
+  return mod?.capacidad_maxima ? Number(mod.capacidad_maxima) : null
 })
 
 const coloresFormulario = computed(() => {
@@ -450,7 +450,6 @@ function labelEstado(e) {
 }
 
 function seleccionarCategoria(catId) {
-  if (props.modoEdicion && catId != categoriaOriginalId.value) return
   form.categoria_id = catId
 }
 
@@ -477,6 +476,9 @@ function validarPaso1() {
   }
   if (!form.capacidad_pasajeros || !Number.isInteger(pasajeros) || pasajeros < 1 || pasajeros > 255) {
     errors.capacidad_pasajeros = 'La capacidad debe ser un número entero entre 1 y 255.'
+    ok = false
+  } else if (capacidadMaximaModelo.value && pasajeros > capacidadMaximaModelo.value) {
+    errors.capacidad_pasajeros = `Este modelo acepta máximo ${capacidadMaximaModelo.value} pasajeros.`
     ok = false
   }
   if (!marcaId.value) { errors.marca_id = 'Selecciona una marca'; ok = false }
@@ -539,7 +541,6 @@ function aplicarErroresBackend(e) {
 }
 
 function resetForm() {
-  categoriaOriginalId.value = null
   marcaId.value = ''
   modelos.value = []
   tipoPropietario.value = propietarioPropio.value ? 'PROPIO' : 'TERCERO'
@@ -551,7 +552,6 @@ function resetForm() {
 }
 
 function aplicarVehiculoAlForm(vehiculo) {
-  categoriaOriginalId.value = vehiculo.categoria_id || vehiculo.categoria?.id || null
   Object.assign(form, {
     id: vehiculo.id,
     placa: vehiculo.placa || '',
@@ -820,6 +820,7 @@ defineExpose({ aplicarErroresBackend })
 .veh-input:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .veh-error { font-size: 0.65rem; color: #c0392b; margin-top: 0.25rem; }
+.veh-hint { font-size: 0.65rem; color: #6b7280; margin-top: 0.25rem; }
 
 .veh-color-btn {
   display: flex;
@@ -874,12 +875,6 @@ defineExpose({ aplicarErroresBackend })
 }
 .veh-form-area--dark .veh-cat-card--active {
   background: rgba(146, 43, 33, 0.25);
-}
-.veh-cat-card--locked {
-  opacity: 0.45;
-  cursor: not-allowed;
-  pointer-events: none;
-  filter: grayscale(0.35);
 }
 .veh-cat-hint {
   display: flex;

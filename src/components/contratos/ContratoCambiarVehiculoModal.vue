@@ -5,7 +5,6 @@
         v-if="visible"
         class="fixed inset-0 z-[80] flex items-center justify-center p-4"
         style="background:rgba(0,0,0,0.45);"
-        @click.self.stop="solicitarCierre"
       >
         <div
           class="rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[92vh] flex flex-col"

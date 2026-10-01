@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <Transition name="pay-slide">
-      <div v-if="visible" class="pay-overlay" @click.self.stop="cerrar">
+      <div v-if="visible" class="pay-overlay">
         <div class="pay-modal" :class="isDark ? 'pay-modal--dark' : ''" @click.stop>
           <header class="pay-header">
             <button type="button" class="pay-close" :disabled="guardando" @click.stop.prevent="cerrar">

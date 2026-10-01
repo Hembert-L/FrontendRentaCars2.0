@@ -814,9 +814,10 @@ const columnasPorTab = {
     { key: "vehiculos_count", label: "Vehículos", width: "18%" },
   ],
   modelos: [
-    { key: "modelo", label: "Modelo", width: "35%" },
-    { key: "marca_nombre", label: "Marca", width: "35%" },
-    { key: "vehiculos_count", label: "Vehículos", width: "18%" },
+    { key: "modelo", label: "Modelo", width: "28%" },
+    { key: "marca_nombre", label: "Marca", width: "28%" },
+    { key: "capacidad_maxima", label: "Máx. pasajeros", width: "16%" },
+    { key: "vehiculos_count", label: "Vehículos", width: "16%" },
   ],
   propietarios: [
     { key: "nombre", label: "Nombre", width: "36%" },
@@ -1161,6 +1162,7 @@ function renderCelda(item, key) {
     nombre: item.nombre,
     modelo: item.nombre,
     marca_nombre: item.marca?.nombre,
+    capacidad_maxima: item.capacidad_maxima,
     modelos_count: item.modelos_count ?? contarModelosPorMarca(item.id),
     vehiculos_count: item.vehiculos_count ?? contarVehiculosRelacionados(item),
     created_at: item.created_at ? formatFecha(item.created_at) : null,
@@ -1443,6 +1445,7 @@ async function accionEditar(item) {
         html: `
         <input id="swal-mod-nombre" class="swal2-input" placeholder="Nombre" value="${item.nombre ?? ""}">
         <select id="swal-mod-marca" class="swal2-input">${marcasHtml}</select>
+        <input id="swal-mod-capacidad" type="number" min="1" max="15" step="1" class="swal2-input" placeholder="Máximo de pasajeros" value="${item.capacidad_maxima ?? ""}">
       `,
         showCancelButton: true,
         confirmButtonText: "Guardar",
@@ -1475,7 +1478,13 @@ async function accionEditar(item) {
             );
             return false;
           }
-          return { nombre, marca_id };
+          const capacidadRaw = document.getElementById("swal-mod-capacidad")?.value;
+          const capacidad_maxima = Number(capacidadRaw);
+          if (!capacidadRaw || !Number.isInteger(capacidad_maxima) || capacidad_maxima < 1 || capacidad_maxima > 15) {
+            Swal.showValidationMessage("Indica un número entero de pasajeros entre 1 y 15");
+            return false;
+          }
+          return { nombre, marca_id, capacidad_maxima };
         },
       });
       if (!isConfirmed || !puedeGestionarCatalogos.value) return;
