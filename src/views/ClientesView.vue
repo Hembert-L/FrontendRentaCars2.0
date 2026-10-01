@@ -17,7 +17,7 @@
     </div>
 
     <div
-      class="rounded-2xl border shadow-sm p-4 mb-5 flex gap-3"
+      class="rounded-2xl border shadow-sm p-4 mb-5 flex flex-col sm:flex-row gap-3"
       :class="isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'"
     >
       <div class="relative flex-1">
@@ -35,6 +35,16 @@
             : 'border-gray-200 bg-gray-50'"
         />
       </div>
+      <select
+        v-model="filtroLicencia"
+        class="px-4 py-2.5 rounded-xl border text-sm focus:outline-none min-w-[170px]"
+        :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-100' : 'border-gray-200 bg-gray-50'"
+      >
+        <option value="">Toda licencia</option>
+        <option value="vigente">Licencia vigente</option>
+        <option value="por_vencer">Vence en 30 días</option>
+        <option value="vencida">Licencia vencida</option>
+      </select>
     </div>
 
     <div
@@ -113,6 +123,7 @@
                       ? 'border-gray-700 bg-gray-800 text-[#f0a500] hover:bg-gray-700 hover:border-gray-600'
                       : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'"
                     title="Ver historial"
+                    data-label="Ver historial"
                   ><i class="pi pi-history text-xs"></i></button>
                   <button
                     type="button"
@@ -122,6 +133,7 @@
                       ? 'border-red-800 bg-red-950/40 text-[#f0a500] hover:bg-red-950/70 hover:border-red-700'
                       : 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100'"
                     title="Editar"
+                    data-label="Editar"
                   ><i class="pi pi-pencil text-xs"></i></button>
                 </div>
               </td>
@@ -195,7 +207,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { formatFecha, fechaSoloISO, fechaHoyLocal } from '@/utils/reservaFormatters'
+import { formatFecha, fechaSoloISO, fechaHoyLocal, sumarDiasISO } from '@/utils/reservaFormatters'
 import ClientesModal from '@/components/clientes/ClientesModal.vue'
 import ClientesHistorialModal from '@/components/clientes/ClientesHistorialModal.vue'
 import { useClientesStore } from '@/stores/clientes'
@@ -206,6 +218,7 @@ const { isDark } = useAppTheme()
 const store = useClientesStore()
 
 const search              = ref('')
+const filtroLicencia      = ref('')
 const modalAbierto        = ref(false)
 const historialAbierto    = ref(false)
 const modoEdicion         = ref(false)
@@ -227,10 +240,20 @@ const clientesFiltrados = computed(() => {
   return clientes.value
 })
 
-watch(search, () => {
+watch([search, filtroLicencia], () => {
   clearTimeout(searchTimer)
   searchTimer = setTimeout(() => cargarClientes(1), 300)
 })
+
+// vencida: ya no puede rentar, por vencer: en los proximos 30 dias
+function estadoLicencia(cliente) {
+  const vence = fechaSoloISO(cliente?.vencimiento_licencia)
+  if (!vence) return ''
+  const hoy = fechaHoyLocal()
+  if (vence <= hoy) return 'vencida'
+  if (vence <= sumarDiasISO(hoy, 30)) return 'por_vencer'
+  return 'vigente'
+}
 
 function clientesParams(page = pagination.value.current_page || 1) {
   const params = { page }
@@ -240,6 +263,10 @@ function clientesParams(page = pagination.value.current_page || 1) {
 }
 
 async function cargarClientes(page = pagination.value.current_page || 1) {
+  if (filtroLicencia.value) {
+    await store.fetchClientesFiltrados(clientesParams(page), (c) => estadoLicencia(c) === filtroLicencia.value, page)
+    return
+  }
   await store.fetchClientes(clientesParams(page))
 }
 

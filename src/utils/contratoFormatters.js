@@ -19,7 +19,9 @@ export const HORAS_PERMITIDAS_OPCIONES = HORAS_PERMITIDAS.map((value) => ({
 export function formatFechaHora12(valor) {
   if (!valor) return '—'
   const s = String(valor)
-  const match = s.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/)
+  // las fechas del back vienen en utc (terminan en Z), si se leen tal cual salen 6 horas adelantadas
+  const tieneZona = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(s)
+  const match = !tieneZona && s.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/)
   if (match) {
     const y = parseInt(match[1], 10)
     const mo = parseInt(match[2], 10)
@@ -87,11 +89,29 @@ export function nombreVehiculo(v) {
   return [marca, modelo].filter(Boolean).join(' ') || v.placa
 }
 
+// yyyy-mm-dd en hora local de una fecha con hora del back (viene en utc)
+export function fechaLocalISO(valor) {
+  if (!valor) return ''
+  const d = new Date(valor)
+  if (Number.isNaN(d.getTime())) return fechaSoloISO(valor)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
 export function calcularDias(fechaEntrega, fechaDevolucion) {
   if (!fechaEntrega || !fechaDevolucion) return 0
   const d1 = new Date(fechaEntrega.slice(0, 10) + 'T00:00:00')
   const d2 = new Date(fechaDevolucion.slice(0, 10) + 'T00:00:00')
   return Math.max(1, Math.round((d2 - d1) / 86400000))
+}
+
+export function reservaChocaConContratoDirecto(fechaEntrega, fechaDevolucion, reserva) {
+  const entrega = fechaSoloISO(fechaEntrega)
+  const devolucion = fechaSoloISO(fechaDevolucion)
+  const inicio = fechaSoloISO(reserva?.fecha_inicio)
+  const fin = fechaSoloISO(reserva?.fecha_fin)
+  if (!entrega || !devolucion || !inicio || !fin) return false
+  return inicio <= devolucion && fin > entrega
 }
 
 export function labelEstadoContrato(e) {
@@ -143,7 +163,7 @@ export function badgeEstadoContrato(estado, isDark = false) {
 }
 
 export function metodoPagoIcon(metodo) {
-  const m = { EFECTIVO: 'pi-wallet', TRANSFERENCIA: 'pi-building', TARJETA: 'pi-credit-card' }
+  const m = { EFECTIVO: 'pi-wallet', TRANSFERENCIA: 'pi-building', DEPOSITO: 'pi-inbox' }
   return m[metodo] || 'pi-dollar'
 }
 
@@ -163,14 +183,12 @@ export function nivelCombustiblePct(valor) {
   return NIVELES_COMBUSTIBLE.find((n) => n.value === nivel)?.pct ?? 0
 }
 
-const ESTADOS_CARGO_COBRABLE = ['PENDIENTE', 'APLICADO']
-
+// solo para mostrar, el back ya los suma en monto_total_renta
 export function montoExtrasContrato(contrato) {
   if (!contrato) return 0
-  if (contrato.monto_extras != null) return toMoneyNumber(contrato.monto_extras)
   const cargos = contrato.cargos_adicionales || contrato.cargosAdicionales || []
   return centsToMoney(cargos
-    .filter((c) => ESTADOS_CARGO_COBRABLE.includes(c.estado_cargo))
+    .filter((c) => c.estado_cargo !== 'ANULADO')
     .reduce((s, c) => s + moneyCents(c.monto), 0))
 }
 
@@ -183,14 +201,13 @@ export function montoPagadoContrato(contrato) {
     .reduce((s, p) => s + moneyCents(p.monto), 0))
 }
 
+// ya incluye cargos e incidencias del cliente
 export function totalFinalContrato(contrato) {
   if (!contrato) return 0
-  if (contrato.total_final != null) return toMoneyNumber(contrato.total_final)
-  return centsToMoney(moneyCents(contrato.monto_total_renta) + moneyCents(montoExtrasContrato(contrato)))
+  return toMoneyNumber(contrato.monto_total_renta)
 }
 
 export function saldoPendienteContrato(contrato) {
   if (!contrato) return 0
-  if (contrato.saldo_pendiente != null) return toMoneyNumber(contrato.saldo_pendiente)
   return centsToMoney(Math.max(0, moneyCents(totalFinalContrato(contrato)) - moneyCents(montoPagadoContrato(contrato))))
 }

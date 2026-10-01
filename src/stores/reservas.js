@@ -7,7 +7,6 @@ function instanteDisponibilidad(value) {
   const fecha = String(value || "").trim().replace(" ", "T");
   if (!fecha) return NaN;
   const fechaHora = /^\d{4}-\d{2}-\d{2}$/.test(fecha) ? `${fecha}T00:00:00` : fecha;
-  // Backend: America/El_Salvador (UTC-06). Respetar la zona de los datetime serializados por Laravel.
   const tieneZona = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(fechaHora);
   return Date.parse(tieneZona ? fechaHora : `${fechaHora}-06:00`);
 }
@@ -59,6 +58,40 @@ export const useReservasStore = defineStore("reservas", () => {
       const payload = res.data?.data;
       reservas.value = extractListFromApi(res.data);
       pagination.value = normalizePagination(payload);
+    } catch {
+      error.value = "Error al cargar reservas.";
+      reservas.value = [];
+      pagination.value = normalizePagination(null);
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  // filtrar: funcion opcional para filtros que el back no tiene (fechas)
+  async function fetchReservasSinCanceladas(params = {}, page = 1, perPage = 10, filtrar = null) {
+    loading.value = true;
+    error.value = null;
+    try {
+      const filtros = { ...params };
+      delete filtros.page;
+      const { items } = await fetchAllPaginated(
+        (requestParams) => api.get("/admin/reservas", { params: requestParams }),
+        filtros,
+      );
+      const visibles = items.filter((reserva) => reserva.estado !== "CANCELADA" && (!filtrar || filtrar(reserva)));
+      const total = visibles.length;
+      const lastPage = Math.max(1, Math.ceil(total / perPage));
+      const actual = Math.min(Math.max(1, Number(page) || 1), lastPage);
+      const inicio = (actual - 1) * perPage;
+      reservas.value = visibles.slice(inicio, inicio + perPage);
+      pagination.value = {
+        current_page: actual,
+        last_page: lastPage,
+        per_page: perPage,
+        total,
+        from: total ? inicio + 1 : 0,
+        to: inicio + reservas.value.length,
+      };
     } catch {
       error.value = "Error al cargar reservas.";
       reservas.value = [];
@@ -170,7 +203,7 @@ export const useReservasStore = defineStore("reservas", () => {
     }
   }
 
-  async function fetchReservasActivasCliente(cliente) {
+  async function fetchReservasCliente(cliente) {
     const clienteId = typeof cliente === "object" ? cliente?.id : cliente;
     const search = typeof cliente === "object"
       ? (cliente?.dui || cliente?.nombre || clienteId)
@@ -181,10 +214,18 @@ export const useReservasStore = defineStore("reservas", () => {
       { search },
     );
     return items.filter(
-      (reserva) => Number(reserva.cliente_id || reserva.cliente?.id) === Number(clienteId)
-        && reserva.estado === "PENDIENTE"
-        && !reserva.contrato,
+      (reserva) => Number(reserva.cliente_id || reserva.cliente?.id) === Number(clienteId),
     );
+  }
+
+  async function fetchReservasActivasCliente(cliente) {
+    const items = await fetchReservasCliente(cliente);
+    return items.filter((reserva) => reserva.estado === "PENDIENTE" && !reserva.contrato);
+  }
+
+  async function fetchReservasVigentesCliente(cliente) {
+    const items = await fetchReservasCliente(cliente);
+    return items.filter((reserva) => ["PENDIENTE", "CONFIRMADA"].includes(reserva.estado));
   }
 
   async function cancelar(id, motivo) {
@@ -221,12 +262,14 @@ export const useReservasStore = defineStore("reservas", () => {
     pagination,
     total,
     fetchReservas,
+    fetchReservasSinCanceladas,
     fetchReserva,
     crear,
     actualizar,
     fetchVehiculosDisponibles,
     fetchVehiculosDisponiblesParaReserva,
     fetchReservasActivasCliente,
+    fetchReservasVigentesCliente,
     cancelar,
     fetchCancelaciones,
     advertencia,

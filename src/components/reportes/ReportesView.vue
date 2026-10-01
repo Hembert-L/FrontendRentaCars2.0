@@ -37,7 +37,7 @@
           <div v-if="reporteAbierto === reporte.id" class="reporte-panel">
             <p class="reporte-panel__description">{{ reporte.descripcion }}</p>
 
-            <div v-if="reporte.needsPeriod || reporte.needsDias || reporte.needsPropietario" class="reporte-filters">
+            <div v-if="reporte.needsPeriod || reporte.needsDias || reporte.needsPropietario || reporte.needsPorcentaje" class="reporte-filters">
               <div v-if="reporte.needsPeriod" class="filter-group filter-group--wide">
                 <label>Periodo rápido</label>
                 <div class="period-options">
@@ -56,12 +56,26 @@
 
               <div v-if="reporte.needsPeriod" class="filter-group">
                 <label :for="`inicio-${reporte.id}`">Fecha inicio</label>
-                <input :id="`inicio-${reporte.id}`" v-model="filtros.fechaInicio" type="date" class="filter-control" />
+                <input
+                  :id="`inicio-${reporte.id}`"
+                  :key="`inicio-${destello}`"
+                  v-model="filtros.fechaInicio"
+                  type="date"
+                  class="filter-control"
+                  :class="{ 'filter-control--cambiado': filtros.periodo !== 'mes', 'filter-control--destello': destello > 0 }"
+                />
               </div>
 
               <div v-if="reporte.needsPeriod" class="filter-group">
                 <label :for="`fin-${reporte.id}`">Fecha fin</label>
-                <input :id="`fin-${reporte.id}`" v-model="filtros.fechaFin" type="date" class="filter-control" />
+                <input
+                  :id="`fin-${reporte.id}`"
+                  :key="`fin-${destello}`"
+                  v-model="filtros.fechaFin"
+                  type="date"
+                  class="filter-control"
+                  :class="{ 'filter-control--cambiado': filtros.periodo !== 'mes', 'filter-control--destello': destello > 0 }"
+                />
               </div>
 
               <div v-if="reporte.needsDias" class="filter-group">
@@ -73,23 +87,58 @@
                   min="1"
                   max="365"
                   class="filter-control"
+                  :class="{ 'filter-control--cambiado': Number(filtros.dias) !== 30 }"
                 />
               </div>
 
               <div v-if="reporte.needsPropietario" class="filter-group">
                 <label :for="`propietario-${reporte.id}`">Propietario</label>
-                <input
+                <select
                   :id="`propietario-${reporte.id}`"
-                  v-model.trim="filtros.propietario"
-                  type="text"
+                  v-model="filtros.propietarioId"
                   class="filter-control"
-                  placeholder="Nombre del propietario"
+                  :class="{ 'filter-control--cambiado': filtros.propietarioId }"
+                  :disabled="cargandoPropietarios"
+                >
+                  <option value="">
+                    {{ cargandoPropietarios ? 'Cargando propietarios...' : 'Todos los propietarios' }}
+                  </option>
+                  <option v-for="p in propietarios" :key="p.id" :value="String(p.id)">
+                    {{ p.nombre }}{{ p.tipo_propietario ? ` (${labelTipoPropietario(p.tipo_propietario)})` : '' }}
+                  </option>
+                </select>
+                <small v-if="errorPropietarios" class="filter-hint filter-hint--error">
+                  {{ errorPropietarios }}
+                  <button type="button" class="filter-retry" @click="cargarPropietarios">Reintentar</button>
+                </small>
+              </div>
+
+              <div v-if="reporte.needsPorcentaje" class="filter-group">
+                <label :for="`porcentaje-${reporte.id}`">% de administración</label>
+                <input
+                  :id="`porcentaje-${reporte.id}`"
+                  v-model.number="filtros.porcentajeAdmin"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  class="filter-control"
+                  :class="{ 'filter-control--cambiado': Number(filtros.porcentajeAdmin) > 0 }"
                 />
+                <small class="filter-hint">Se descuenta de los ingresos de propietarios que no son propios.</small>
               </div>
             </div>
 
             <p v-else class="reporte-panel__empty-filter">
               Este reporte no necesita filtros adicionales.
+            </p>
+
+            <p v-if="resumenFiltros(reporte).length" class="reporte-resumen">
+              Se generará con:
+              <template v-for="(parte, i) in resumenFiltros(reporte)" :key="parte.etiqueta">
+                <span v-if="i" class="reporte-resumen__sep">·</span>
+                {{ parte.etiqueta }} <strong>{{ parte.valor }}</strong>
+              </template>
             </p>
 
             <div class="reporte-actions">
@@ -99,12 +148,23 @@
               </button>
               <button
                 type="button"
+                class="action-btn action-btn--ghost"
+                :disabled="generando === reporte.id"
+                title="Descargar el PDF como archivo"
+                @click="generarReporte(reporte, 'descargar')"
+              >
+                <i class="pi pi-download"></i>
+                Descargar
+              </button>
+              <button
+                type="button"
                 class="action-btn action-btn--primary"
                 :disabled="generando === reporte.id"
-                @click="generarReporte(reporte)"
+                title="Abrir el PDF en una pestaña nueva"
+                @click="generarReporte(reporte, 'abrir')"
               >
                 <i :class="generando === reporte.id ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'"></i>
-                {{ generando === reporte.id ? 'Generando...' : 'Generar' }}
+                {{ generando === reporte.id ? 'Generando...' : 'Abrir PDF' }}
               </button>
             </div>
           </div>
@@ -115,29 +175,57 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted } from 'vue'
+import { reactive, ref, onMounted, watch } from 'vue'
 import Swal from 'sweetalert2'
 import { useAppTheme } from '@/composables/useAppTheme'
-import { abrirPdf } from '@/utils/pdfDownload'
+import api from '@/services/api'
+import { fetchAllPaginated } from '@/utils/apiPagination'
+import { abrirPdf, descargarPdf } from '@/utils/pdfDownload'
+import { toastSuccess } from '@/utils/toast'
 
 const { isDark } = useAppTheme()
 const generando = ref('')
 const STORAGE_KEY_REPORTE_ABIERTO = 'rentacar:reportes:reporte-abierto'
 const reporteAbierto = ref('')
+const destello = ref(0)
 
 const filtros = reactive({
   periodo: 'mes',
   fechaInicio: '',
   fechaFin: '',
   dias: 30,
-  propietario: '',
+  propietarioId: '',
+  porcentajeAdmin: 0,
 })
+
+const propietarios = ref([])
+const cargandoPropietarios = ref(false)
+const errorPropietarios = ref('')
+
+async function cargarPropietarios() {
+  cargandoPropietarios.value = true
+  errorPropietarios.value = ''
+  try {
+    const { items } = await fetchAllPaginated((params) => api.get('/admin/propietarios', { params }))
+    propietarios.value = [...items].sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), 'es'))
+  } catch (e) {
+    propietarios.value = []
+    errorPropietarios.value = e.response?.data?.message || 'No se pudo cargar la lista de propietarios.'
+  } finally {
+    cargandoPropietarios.value = false
+  }
+}
+
+function labelTipoPropietario(tipo) {
+  const labels = { PROPIO: 'propio', TERCERO: 'tercero', FAMILIAR: 'familiar' }
+  return labels[tipo] || String(tipo).toLowerCase()
+}
 
 const reportes = [
   {
     id: 'desempeno-general',
     titulo: 'Desempeño general',
-    descripcion: 'Resumen ejecutivo de ingresos, contratos, ocupación de flota, clientes nuevos y gastos de mantenimiento.',
+    descripcion: 'Resumen ejecutivo de ingresos, contratos, ocupación de flota, clientes nuevos y gastos del negocio (incidencias y mantenimientos).',
     icono: 'pi-chart-line',
     endpoint: '/admin/reportes/desempeno-general',
     needsPeriod: true,
@@ -185,7 +273,7 @@ const reportes = [
   {
     id: 'gastos-por-vehiculo',
     titulo: 'Gastos por vehículo',
-    descripcion: 'Gastos por mantenimientos e incidencias asumidas por el negocio, agrupados por vehículo.',
+    descripcion: 'Gastos del negocio por vehículo: incidencias asumidas por el negocio y mantenimientos.',
     icono: 'pi-wrench',
     endpoint: '/admin/reportes/gastos-por-vehiculo',
     needsPeriod: true,
@@ -193,10 +281,20 @@ const reportes = [
   {
     id: 'resultado-neto-por-vehiculo',
     titulo: 'Resultado neto por vehículo',
-    descripcion: 'Comparativo de ingresos, gastos y resultado neto por cada vehículo.',
+    descripcion: 'Comparativo por vehículo de ingresos confirmados, gastos (incidencias del negocio y mantenimientos) y resultado neto.',
     icono: 'pi-chart-pie',
     endpoint: '/admin/reportes/resultado-neto-por-vehiculo',
     needsPeriod: true,
+  },
+  {
+    id: 'resultado-neto-por-propietario',
+    titulo: 'Resultado neto por propietario',
+    descripcion: 'Ingresos, gastos (incidencias del negocio y mantenimientos) y resultado neto agrupados por propietario.',
+    icono: 'pi-wallet',
+    endpoint: '/admin/reportes/resultado-neto-por-propietario',
+    needsPeriod: true,
+    needsPropietario: true,
+    needsPorcentaje: true,
   },
   {
     id: 'saldos-pendientes',
@@ -219,39 +317,63 @@ function toggleReporte(id) {
   localStorage.setItem(STORAGE_KEY_REPORTE_ABIERTO, reporteAbierto.value)
 }
 
-function seleccionarPeriodo(valor) {
-  filtros.periodo = valor
+function rangoPeriodo(valor) {
   const hoy = new Date()
-
-  if (valor === 'personalizado') return
-
-  if (valor === 'mes') {
-    filtros.fechaInicio = fechaISO(new Date(hoy.getFullYear(), hoy.getMonth(), 1))
-    filtros.fechaFin = fechaISO(hoy)
-    return
-  }
-
+  if (valor === 'mes') return { inicio: fechaISO(new Date(hoy.getFullYear(), hoy.getMonth(), 1)), fin: fechaISO(hoy) }
   if (valor === 'trimestral') {
     const inicio = new Date(hoy)
     inicio.setMonth(hoy.getMonth() - 3)
-    filtros.fechaInicio = fechaISO(inicio)
-    filtros.fechaFin = fechaISO(hoy)
-    return
+    return { inicio: fechaISO(inicio), fin: fechaISO(hoy) }
   }
+  if (valor === 'anual') return { inicio: fechaISO(new Date(hoy.getFullYear(), 0, 1)), fin: fechaISO(hoy) }
+  return null
+}
 
-  if (valor === 'anual') {
-    filtros.fechaInicio = fechaISO(new Date(hoy.getFullYear(), 0, 1))
-    filtros.fechaFin = fechaISO(hoy)
+function seleccionarPeriodo(valor) {
+  filtros.periodo = valor
+  const rango = rangoPeriodo(valor)
+  if (!rango) return
+  filtros.fechaInicio = rango.inicio
+  filtros.fechaFin = rango.fin
+  destello.value++
+}
+
+// si se cambia una fecha a mano ya no es "este mes": se marca personalizado
+watch(() => [filtros.fechaInicio, filtros.fechaFin], ([inicio, fin]) => {
+  const rango = rangoPeriodo(filtros.periodo)
+  if (rango && (rango.inicio !== inicio || rango.fin !== fin)) filtros.periodo = 'personalizado'
+})
+
+function fechaCorta(iso) {
+  if (!iso) return '—'
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('es-SV', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+// lo que se va a mandar al reporte, para que se vea que el filtro si cambio
+function resumenFiltros(reporte) {
+  const partes = []
+  if (reporte.needsPeriod) {
+    const periodo = periodos.find((p) => p.value === filtros.periodo)?.label || 'Personalizado'
+    partes.push({ etiqueta: `${periodo}:`, valor: `${fechaCorta(filtros.fechaInicio)} – ${fechaCorta(filtros.fechaFin)}` })
   }
+  if (reporte.needsDias) partes.push({ etiqueta: 'Licencias que vencen en', valor: `${filtros.dias || 0} días` })
+  if (reporte.needsPropietario) {
+    const prop = propietarios.value.find((p) => String(p.id) === filtros.propietarioId)
+    partes.push({ etiqueta: 'Propietario:', valor: prop ? prop.nombre : 'Todos' })
+  }
+  if (reporte.needsPorcentaje) partes.push({ etiqueta: 'Administración:', valor: `${Number(filtros.porcentajeAdmin) || 0}%` })
+  return partes
 }
 
 function limpiarFiltros(reporte) {
   filtros.dias = 30
-  filtros.propietario = ''
+  filtros.propietarioId = ''
+  filtros.porcentajeAdmin = 0
   if (reporte.needsPeriod) seleccionarPeriodo('mes')
 }
 
-async function generarReporte(reporte) {
+async function generarReporte(reporte, modo = 'abrir') {
   const error = validarReporte(reporte)
   if (error) {
     await mostrarAlerta('warning', 'Revisa los filtros', error)
@@ -260,7 +382,15 @@ async function generarReporte(reporte) {
 
   generando.value = reporte.id
   try {
-    await abrirPdf(reporte.endpoint, paramsReporte(reporte))
+    const resultado = modo === 'descargar'
+      ? await descargarPdf(reporte.endpoint, paramsReporte(reporte), `reporte-${reporte.id}.pdf`)
+      : await abrirPdf(reporte.endpoint, paramsReporte(reporte))
+    toastSuccess(
+      'Reporte generado',
+      resultado?.modo === 'descarga'
+        ? `Se descargó ${resultado.filename}.`
+        : 'El PDF se abrió en una pestaña nueva.',
+    )
   } catch (e) {
     await mostrarAlerta('error', 'No se pudo generar', e.response?.data?.message || e.message || 'Intenta de nuevo.')
   } finally {
@@ -281,6 +411,11 @@ function validarReporte(reporte) {
     return 'Los días por vencer deben estar entre 1 y 365.'
   }
 
+  const porcentaje = Number(filtros.porcentajeAdmin || 0)
+  if (reporte.needsPorcentaje && (!Number.isFinite(porcentaje) || porcentaje < 0 || porcentaje > 100)) {
+    return 'El porcentaje de administración debe estar entre 0 y 100.'
+  }
+
   return ''
 }
 
@@ -293,7 +428,10 @@ function paramsReporte(reporte) {
   }
 
   if (reporte.needsDias) params.dias = filtros.dias
-  if (reporte.needsPropietario && filtros.propietario) params.propietario = filtros.propietario
+  if (reporte.needsPropietario && filtros.propietarioId) params.propietario_id = filtros.propietarioId
+  if (reporte.needsPorcentaje && Number(filtros.porcentajeAdmin) > 0) {
+    params.porcentaje_administracion = Number(filtros.porcentajeAdmin)
+  }
 
   return params
 }
@@ -318,6 +456,7 @@ function fechaISO(fecha) {
 
 onMounted(() => {
   seleccionarPeriodo('mes')
+  cargarPropietarios()
   const reporteGuardado = localStorage.getItem(STORAGE_KEY_REPORTE_ABIERTO)
   if (reportes.some((reporte) => reporte.id === reporteGuardado)) {
     reporteAbierto.value = reporteGuardado
@@ -513,6 +652,78 @@ onMounted(() => {
   box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.12);
 }
 
+/* filtro distinto al valor por defecto */
+.filter-control--cambiado {
+  border-color: #c0392b;
+  background: #fdf3f2;
+}
+
+.reporte-item--dark .filter-control--cambiado {
+  border-color: #f0a500;
+  background: rgba(240, 165, 0, 0.08);
+}
+
+/* al elegir un periodo las fechas parpadean para que se note que cambiaron */
+.filter-control--destello {
+  animation: destello-fecha 0.7s ease;
+}
+
+@keyframes destello-fecha {
+  0% { box-shadow: 0 0 0 4px rgba(192, 57, 43, 0.35); }
+  100% { box-shadow: 0 0 0 0 rgba(192, 57, 43, 0); }
+}
+
+.reporte-resumen {
+  margin: -0.25rem 0 1.1rem;
+  color: #64748b;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.reporte-resumen strong {
+  color: #922b21;
+  font-weight: 700;
+}
+
+.reporte-item--dark .reporte-resumen strong {
+  color: #f0a500;
+}
+
+.reporte-resumen__sep {
+  margin: 0 0.4rem;
+  opacity: 0.5;
+}
+
+.filter-control:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.filter-hint {
+  color: #64748b;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.reporte-item--dark .filter-hint {
+  color: #94a3b8;
+}
+
+.filter-hint--error {
+  color: #b91c1c;
+}
+
+.reporte-item--dark .filter-hint--error {
+  color: #fca5a5;
+}
+
+.filter-retry {
+  margin-left: 0.35rem;
+  font-weight: 800;
+  text-decoration: underline;
+  color: inherit;
+}
+
 .period-options {
   display: flex;
   flex-wrap: wrap;
@@ -544,9 +755,13 @@ onMounted(() => {
 
 .reporte-actions {
   display: flex;
-  justify-content: space-between;
-  gap: 1rem;
+  justify-content: flex-end;
+  gap: 0.75rem;
   margin-top: 0.4rem;
+}
+
+.reporte-actions > .action-btn:first-child {
+  margin-right: auto;
 }
 
 .action-btn {

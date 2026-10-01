@@ -3,6 +3,7 @@
     :class="[
       'fixed top-0 left-0 h-full z-50 flex flex-col transition-all duration-300 bg-[#a62b1e]',
       collapsed ? 'w-16' : 'w-64',
+      movil && !abierto ? '-translate-x-full' : 'translate-x-0',
     ]"
   >
     <div
@@ -10,12 +11,23 @@
       :class="{ 'sidebar-brand--collapsed': collapsed }"
     >
       <div class="sidebar-logo">
-        <img :src="logoElGuayabo" alt="El Guayabo RentCar" class="w-full h-full object-contain" />
+        <img :src="logoElGuayabo" alt="El Guayabo RentaCar" class="w-full h-full object-contain" />
       </div>
       <div class="sidebar-title" :class="{ 'sidebar-title--collapsed': collapsed }">
         <span class="text-white font-extrabold text-base tracking-widest uppercase">RentaCar</span>
       </div>
       <button
+        v-if="movil"
+        type="button"
+        class="sidebar-collapse-btn"
+        title="Cerrar menú"
+        aria-label="Cerrar menú"
+        @click="emit('cerrar')"
+      >
+        <i class="pi pi-times text-sm"></i>
+      </button>
+      <button
+        v-else
         type="button"
         class="sidebar-collapse-btn"
         :class="{ 'sidebar-collapse-btn--collapsed': collapsed }"
@@ -37,6 +49,7 @@
           Principal
         </p>
         <SidebarItem
+          v-if="acceso.dashboard"
           icon="pi-home"
           label="Dashboard"
           :collapsed="collapsed"
@@ -77,7 +90,7 @@
         />
       </div>
 
-      <div v-if="puedeOperar">
+      <div v-if="acceso.pagos || puedeOperar || acceso.reportes">
         <p
           v-if="!collapsed"
           class="text-xs font-bold tracking-widest uppercase px-3 mb-2"
@@ -86,6 +99,7 @@
           Operaciones
         </p>
         <SidebarItem
+          v-if="acceso.pagos"
           icon="pi-credit-card"
           label="Pagos"
           :collapsed="collapsed"
@@ -93,6 +107,7 @@
           @click="navegar('pagos')"
         />
         <SidebarItem
+          v-if="puedeOperar"
           icon="pi-wrench"
           label="Mantenimiento"
           :collapsed="collapsed"
@@ -100,6 +115,7 @@
           @click="navegar('mantenimiento')"
         />
         <SidebarItem
+          v-if="acceso.reportes"
           icon="pi-chart-bar"
           label="Reportes"
           :collapsed="collapsed"
@@ -155,23 +171,33 @@ import InputSwitch from "primevue/inputswitch";
 import SidebarItem from "./SidebarItem.vue";
 import { useThemeStore } from "@/stores/theme";
 import { useAuthStore } from "@/stores/auth";
+import { tieneAcceso } from "@/utils/permisos";
 import logoElGuayabo from "@/assets/logo-el-guayabo.png";
 
 const themeStore = useThemeStore();
 const authStore = useAuthStore();
-const puedeOperar = computed(() =>
-  authStore.userRoles.some((role) => ["ADMINISTRADOR", "EMPLEADO"].includes(role)),
-);
+const acceso = computed(() => ({
+  dashboard: tieneAcceso(authStore.userRoles, "dashboard"),
+  pagos: tieneAcceso(authStore.userRoles, "pagos"),
+  reportes: tieneAcceso(authStore.userRoles, "reportes"),
+}));
+const puedeOperar = computed(() => tieneAcceso(authStore.userRoles, "operacion"));
 const darkSwitch = computed({
   get: () => themeStore.isDark,
   set: (v) => themeStore.setDark(v),
 });
 
-const emit = defineEmits(["collapsed-change"]);
+const props = defineProps({
+  movil: { type: Boolean, default: false },
+  abierto: { type: Boolean, default: false },
+});
+
+const emit = defineEmits(["collapsed-change", "cerrar"]);
 const router = useRouter();
 const route = useRoute();
 
-const collapsed = ref(false);
+const collapsedEscritorio = ref(false);
+const collapsed = computed(() => !props.movil && collapsedEscritorio.value);
 const activeRoute = ref("dashboard");
 
 watch(
@@ -184,13 +210,14 @@ watch(
 );
 
 function toggleCollapse() {
-  collapsed.value = !collapsed.value;
-  emit("collapsed-change", collapsed.value);
+  collapsedEscritorio.value = !collapsedEscritorio.value;
+  emit("collapsed-change", collapsedEscritorio.value);
 }
 
 function navegar(ruta) {
   activeRoute.value = ruta;
   router.push("/" + ruta);
+  if (props.movil) emit("cerrar");
 }
 </script>
 

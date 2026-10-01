@@ -51,11 +51,13 @@
         :usuarios="usuariosPaginados"
         :search="search"
         :filtro-activo="filtroActivo"
+        :filtro-estado="filtroEstado"
         :filtros="filtros"
         :pagination="pagination"
         :loading="store.loading"
         @update:search="search = $event"
         @update:filtro="filtroActivo = $event"
+        @update:filtro-estado="filtroEstado = $event"
         @cambiar-pagina="cambiarPagina"
         @editar="abrirModalEditar"
         @cambiar-estado="cambiarEstado"
@@ -86,6 +88,7 @@ const store = useUsuariosStore()
 
 const search = ref('')
 const filtroActivo = ref('todos')
+const filtroEstado = ref('')
 const modalAbierto = ref(false)
 const modoEdicion = ref(false)
 const usuarioSeleccionado = ref(null)
@@ -110,6 +113,10 @@ const usuariosFiltrados = computed(() => {
     lista = lista.filter(
       u => u.roles?.[0]?.name === filtroActivo.value
     )
+  }
+
+  if (filtroEstado.value) {
+    lista = lista.filter(u => String(u.estado || '').toUpperCase() === filtroEstado.value)
   }
 
   if (search.value.trim()) {
@@ -147,7 +154,7 @@ const usuariosPaginados = computed(() => {
   return usuariosFiltrados.value.slice(start, start + usuariosPorPagina)
 })
 
-watch([search, filtroActivo], () => {
+watch([search, filtroActivo, filtroEstado], () => {
   paginaActual.value = 1
 })
 

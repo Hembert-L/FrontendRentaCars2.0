@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen flex flex-col lg:flex-row login-page" style="font-family: 'Sora', sans-serif;">
+  <div class="min-h-screen flex flex-col lg:flex-row login-page" style="font-family: 'Montserrat', sans-serif;">
     <div class="hidden lg:flex lg:w-[45%] relative overflow-hidden bg-[#1a0505]">
       <div class="absolute inset-0 grid grid-cols-4 grid-rows-4 login-pattern">
         <div class="bg-[#f0a500]" />
@@ -18,7 +18,7 @@
       <div class="login-logo-slot">
         <img
           :src="logoElGuayabo"
-          alt="El Guayabo Rent Car"
+          alt="El Guayabo Renta Car"
           class="login-logo login-logo--panel"
         />
         <p class="login-brand-text">
@@ -114,6 +114,7 @@
 import { ref, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { rutaInicio } from '@/utils/permisos'
 import logoElGuayabo from '@/assets/logo-el-guayabo.png'
 
 const route     = useRoute()
@@ -144,7 +145,7 @@ async function handleLogin() {
     await authStore.login(form.email, form.password, form.remember)
 
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : null
-    router.push(redirect || { name: 'dashboard' })
+    router.push(redirect || rutaInicio(authStore.userRoles))
 
   } catch (e) {
     const msg = e.response?.data?.message || 'Credenciales incorrectas. Intenta de nuevo.'
@@ -156,7 +157,6 @@ async function handleLogin() {
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&display=swap');
 
 .login-page {
   animation: login-fade-in 0.45s ease-out;

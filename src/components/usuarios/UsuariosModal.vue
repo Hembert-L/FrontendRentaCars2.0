@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <Transition name="modal">
-      <div v-if="visible" class="fixed inset-0 z-[80] flex items-center justify-center p-4" style="background:rgba(0,0,0,0.55);" @click.self.stop="$emit('cerrar')">
+      <div v-if="visible" class="fixed inset-0 z-[80] flex items-center justify-center p-4" style="background:rgba(0,0,0,0.55);">
         <div class="rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" :class="isDark ? 'bg-gray-900' : 'bg-white'" @click.stop>
 
           <!-- Header -->
@@ -33,7 +33,7 @@
                 <label class="field-label" :class="isDark ? 'text-gray-400' : 'text-gray-600'">Nombre</label>
                 <div class="relative">
                   <i class="pi pi-user input-icon" :class="isDark ? 'text-gray-500' : 'text-gray-400'"></i>
-                  <input v-model="form.nombre" type="text" class="field-input" :class="[errors.nombre ? 'error' : '', isDark ? 'field-input-dark' : 'field-input-light']" />
+                  <input v-model="form.nombre" type="text" maxlength="15" autocomplete="given-name" class="field-input" :class="[errors.nombre ? 'error' : '', isDark ? 'field-input-dark' : 'field-input-light']" />
                 </div>
                 <p v-if="errors.nombre" class="field-error">{{ errors.nombre }}</p>
               </div>
@@ -41,7 +41,7 @@
                 <label class="field-label" :class="isDark ? 'text-gray-400' : 'text-gray-600'">Apellido</label>
                 <div class="relative">
                   <i class="pi pi-user input-icon" :class="isDark ? 'text-gray-500' : 'text-gray-400'"></i>
-                  <input v-model="form.apellido" type="text" class="field-input" :class="[errors.apellido ? 'error' : '', isDark ? 'field-input-dark' : 'field-input-light']" />
+                  <input v-model="form.apellido" type="text" maxlength="100" autocomplete="family-name" class="field-input" :class="[errors.apellido ? 'error' : '', isDark ? 'field-input-dark' : 'field-input-light']" />
                 </div>
                 <p v-if="errors.apellido" class="field-error">{{ errors.apellido }}</p>
               </div>
@@ -103,15 +103,17 @@
               <p v-if="errors.rol" class="field-error mt-1">{{ errors.rol }}</p>
             </div>
 
-            <!-- Contraseña solo al crear -->
-            <div v-if="!modoEdicion">
-              <label class="field-label" :class="isDark ? 'text-gray-400' : 'text-gray-600'">Contraseña temporal</label>
+            <div>
+              <label class="field-label" :class="isDark ? 'text-gray-400' : 'text-gray-600'">
+                {{ modoEdicion ? 'Nueva contraseña (opcional)' : 'Contraseña temporal' }}
+              </label>
               <div class="relative">
                 <i class="pi pi-lock input-icon" :class="isDark ? 'text-gray-500' : 'text-gray-400'"></i>
                 <input
                   v-model="form.password"
                   :type="showPassword ? 'text' : 'password'"
-                  placeholder="Mínimo 8 caracteres"
+                  autocomplete="new-password"
+                  :placeholder="modoEdicion ? 'Déjala vacía para no cambiarla' : 'Mínimo 8 caracteres'"
                   class="field-input pr-10"
                   :class="[errors.password ? 'error' : '', isDark ? 'field-input-dark' : 'field-input-light']"
                 />
@@ -203,14 +205,29 @@ watch(() => props.visible, (val) => {
   }
 })
 
+// solo letras, espacios, apostrofo y guion (igual que el back)
+const SOLO_LETRAS = /^\p{L}[\p{L}\s'-]*$/u
+
+function errorNombre(valor, max = 100) {
+  const texto = (valor || '').trim()
+  if (!texto) return 'Requerido'
+  if (/\d/.test(texto)) return 'No puede llevar números'
+  if (!SOLO_LETRAS.test(texto)) return 'Solo letras y espacios'
+  if (texto.length < 2) return 'Mínimo 2 letras'
+  if (texto.length > max) return `Máximo ${max} caracteres`
+  return ''
+}
+
 function validar() {
   Object.keys(errors).forEach(k => errors[k] = '')
   let ok = true
-  if (!form.nombre)   { errors.nombre   = 'Requerido'; ok = false }
-  if (!form.apellido) { errors.apellido = 'Requerido'; ok = false }
+  errors.nombre = errorNombre(form.nombre, 15)
+  errors.apellido = errorNombre(form.apellido)
+  if (errors.nombre || errors.apellido) ok = false
   if (!form.correo || !/\S+@\S+\.\S+/.test(form.correo)) { errors.correo = 'Correo inválido'; ok = false }
   if (!esAdminUsuario.value && !form.rol) { errors.rol = 'Selecciona un rol'; ok = false }
-  if (!props.modoEdicion && form.password.length < 8) { errors.password = 'Mínimo 8 caracteres'; ok = false }
+  const cambiaPassword = !props.modoEdicion || form.password.length > 0
+  if (cambiaPassword && form.password.length < 8) { errors.password = 'Mínimo 8 caracteres'; ok = false }
   return ok
 }
 
@@ -219,7 +236,7 @@ async function handleGuardar() {
   loading.value     = true
   globalError.value = ''
   try {
-    const payload = { ...form }
+    const payload = { ...form, nombre: form.nombre.trim(), apellido: form.apellido.trim() }
     if (esAdminUsuario.value) delete payload.rol
     emit('guardar', payload)
   } catch {
