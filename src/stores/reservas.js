@@ -7,7 +7,6 @@ function instanteDisponibilidad(value) {
   const fecha = String(value || "").trim().replace(" ", "T");
   if (!fecha) return NaN;
   const fechaHora = /^\d{4}-\d{2}-\d{2}$/.test(fecha) ? `${fecha}T00:00:00` : fecha;
-  // Backend: America/El_Salvador (UTC-06). Respetar la zona de los datetime serializados por Laravel.
   const tieneZona = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(fechaHora);
   return Date.parse(tieneZona ? fechaHora : `${fechaHora}-06:00`);
 }
@@ -68,7 +67,8 @@ export const useReservasStore = defineStore("reservas", () => {
     }
   }
 
-  async function fetchReservasSinCanceladas(params = {}, page = 1, perPage = 10) {
+  // filtrar: funcion opcional para filtros que el back no tiene (fechas)
+  async function fetchReservasSinCanceladas(params = {}, page = 1, perPage = 10, filtrar = null) {
     loading.value = true;
     error.value = null;
     try {
@@ -78,7 +78,7 @@ export const useReservasStore = defineStore("reservas", () => {
         (requestParams) => api.get("/admin/reservas", { params: requestParams }),
         filtros,
       );
-      const visibles = items.filter((reserva) => reserva.estado !== "CANCELADA");
+      const visibles = items.filter((reserva) => reserva.estado !== "CANCELADA" && (!filtrar || filtrar(reserva)));
       const total = visibles.length;
       const lastPage = Math.max(1, Math.ceil(total / perPage));
       const actual = Math.min(Math.max(1, Number(page) || 1), lastPage);

@@ -96,6 +96,35 @@
         <option value="">Todos los estados</option>
         <option v-for="e in estadosFiltro" :key="e.value" :value="e.value">{{ e.label }}</option>
       </select>
+      <template v-if="activeTab === 'vehiculos'">
+        <select
+          v-model="filtroCategoria"
+          class="px-4 py-2.5 rounded-xl border text-sm font-medium min-w-[160px]"
+          :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-200' : 'border-gray-300 bg-white text-gray-700'"
+        >
+          <option value="">Todas las categorías</option>
+          <option v-for="c in store.categorias" :key="c.id" :value="String(c.id)">{{ c.nombre }}</option>
+        </select>
+        <select
+          v-model="filtroPropietario"
+          class="px-4 py-2.5 rounded-xl border text-sm font-medium min-w-[170px]"
+          :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-200' : 'border-gray-300 bg-white text-gray-700'"
+        >
+          <option value="">Todos los propietarios</option>
+          <option v-for="p in store.propietarios" :key="p.id" :value="String(p.id)">{{ p.nombre }}</option>
+        </select>
+      </template>
+      <select
+        v-if="activeTab === 'seguros'"
+        v-model="filtroVigencia"
+        class="px-4 py-2.5 rounded-xl border text-sm font-medium min-w-[170px]"
+        :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-200' : 'border-gray-300 bg-white text-gray-700'"
+      >
+        <option value="">Toda vigencia</option>
+        <option value="al_dia">Al día</option>
+        <option value="por_vencer">Vencen en 30 días</option>
+        <option value="vencido">Fecha vencida</option>
+      </select>
     </div>
 
     <div
@@ -405,6 +434,7 @@
                       "
                       :disabled="seguroGuardando"
                       title="Ver seguro"
+                      data-label="Ver"
                       @click="accionVerSeguro(item)"
                     >
                       <i class="pi pi-eye text-xs"></i>
@@ -420,6 +450,7 @@
                       "
                       :disabled="seguroGuardando"
                       title="Editar seguro"
+                      data-label="Editar"
                       @click="accionEditarSeguro(item)"
                     >
                       <i class="pi pi-pencil text-xs"></i>
@@ -435,6 +466,7 @@
                       "
                       :disabled="seguroGuardando"
                       title="Anular seguro"
+                      data-label="Anular"
                       @click="accionAnularSeguro(item)"
                     >
                       <i class="pi pi-ban text-xs"></i>
@@ -451,6 +483,7 @@
                         : 'border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100'
                     "
                     :title="`Editar ${tabActiva.label.slice(0, -1).toLowerCase()}`"
+                    data-label="Editar"
                   >
                     <i class="pi pi-pencil text-xs"></i>
                   </button>
@@ -463,6 +496,7 @@
                     "
                     type="button"
                     @click="accionEliminar(item)"
+                    :data-label="activeTab === 'vehiculos' ? 'Fuera de servicio' : 'Eliminar'"
                     class="w-8 h-8 rounded-lg inline-flex items-center justify-center border transition-all hover:shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
                     :class="
                       isDark
@@ -491,6 +525,7 @@
                         : 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
                     "
                     title="Restaurar vehículo"
+                    data-label="Restaurar"
                   >
                     <i class="pi pi-refresh text-xs"></i>
                   </button>
@@ -668,6 +703,9 @@ const seguroModalRef = ref(null);
 
 const search = ref("");
 const filtroEstado = ref("");
+const filtroCategoria = ref("");
+const filtroPropietario = ref("");
+const filtroVigencia = ref("");
 const route = useRoute();
 const router = useRouter();
 const activeTab = ref("vehiculos");
@@ -818,7 +856,7 @@ watch(() => route.query.tab, (tab) => {
   cambiarTab(tab ? String(tab) : "vehiculos");
 });
 
-watch([search, filtroEstado], () => {
+watch([search, filtroEstado, filtroCategoria, filtroPropietario], () => {
   if (activeTab.value !== "vehiculos") return;
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => cargarVehiculos(1), 300);
@@ -869,6 +907,10 @@ const itemsFiltrados = computed(() => {
       filtroEstado.value &&
       item.estado !== filtroEstado.value
     ) {
+      return false;
+    }
+    if (activeTab.value === "vehiculos" && !coincideCatalogo(item)) return false;
+    if (activeTab.value === "seguros" && filtroVigencia.value && vigenciaSeguro(item) !== filtroVigencia.value) {
       return false;
     }
     if (!term) return true;
@@ -1005,7 +1047,12 @@ function cambiarTab(tab) {
   }
   search.value = "";
   catalogoPaginaActual.value = 1;
-  if (tab !== "vehiculos") filtroEstado.value = "";
+  if (tab !== "vehiculos") {
+    filtroEstado.value = "";
+    filtroCategoria.value = "";
+    filtroPropietario.value = "";
+  }
+  if (tab !== "seguros") filtroVigencia.value = "";
   if (tab === "vehiculos") cargarVehiculos(1);
   if (tab === "seguros" && !seguros.value.length && puedeVerSeguros.value)
     segurosStore.fetchSeguros().catch(() => {});
@@ -1020,10 +1067,20 @@ function vehiculosParams(page = pagination.value.current_page || 1) {
 }
 
 async function cargarVehiculos(page = pagination.value.current_page || 1) {
+  if (filtroCategoria.value || filtroPropietario.value) {
+    await store.fetchVehiculosFiltrados(vehiculosParams(page), coincideCatalogo, page);
+    return;
+  }
   await store.fetchVehiculos(vehiculosParams(page));
   if (page > 1 && vehiculos.value.length === 0) {
     await store.fetchVehiculos(vehiculosParams(page - 1));
   }
+}
+
+function coincideCatalogo(item) {
+  if (filtroCategoria.value && String(item.categoria_id ?? item.categoria?.id) !== filtroCategoria.value) return false;
+  if (filtroPropietario.value && String(item.propietario_id ?? item.propietario?.id) !== filtroPropietario.value) return false;
+  return true;
 }
 
 async function cambiarPaginaVehiculos(page) {
@@ -1205,6 +1262,19 @@ function seguroFechaVencida(seguro) {
   const actual = hoy.getFullYear() * 10000 + (hoy.getMonth() + 1) * 100 + hoy.getDate();
   const vencimiento = fechaSeguroCalendario(seguro.fecha_vencimiento);
   return vencimiento != null && vencimiento < actual;
+}
+
+// el back solo manda los vigentes, esto separa los que ya pasaron o estan por pasar la fecha
+function vigenciaSeguro(seguro) {
+  const vencimiento = fechaSeguroCalendario(seguro?.fecha_vencimiento);
+  if (vencimiento == null) return "al_dia";
+  const hoy = new Date();
+  const actual = hoy.getFullYear() * 10000 + (hoy.getMonth() + 1) * 100 + hoy.getDate();
+  const limite = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 30);
+  const enTreinta = limite.getFullYear() * 10000 + (limite.getMonth() + 1) * 100 + limite.getDate();
+  if (vencimiento < actual) return "vencido";
+  if (vencimiento <= enTreinta) return "por_vencer";
+  return "al_dia";
 }
 
 function estadoSeguroClase(estado) {

@@ -56,12 +56,26 @@
 
               <div v-if="reporte.needsPeriod" class="filter-group">
                 <label :for="`inicio-${reporte.id}`">Fecha inicio</label>
-                <input :id="`inicio-${reporte.id}`" v-model="filtros.fechaInicio" type="date" class="filter-control" />
+                <input
+                  :id="`inicio-${reporte.id}`"
+                  :key="`inicio-${destello}`"
+                  v-model="filtros.fechaInicio"
+                  type="date"
+                  class="filter-control"
+                  :class="{ 'filter-control--cambiado': filtros.periodo !== 'mes', 'filter-control--destello': destello > 0 }"
+                />
               </div>
 
               <div v-if="reporte.needsPeriod" class="filter-group">
                 <label :for="`fin-${reporte.id}`">Fecha fin</label>
-                <input :id="`fin-${reporte.id}`" v-model="filtros.fechaFin" type="date" class="filter-control" />
+                <input
+                  :id="`fin-${reporte.id}`"
+                  :key="`fin-${destello}`"
+                  v-model="filtros.fechaFin"
+                  type="date"
+                  class="filter-control"
+                  :class="{ 'filter-control--cambiado': filtros.periodo !== 'mes', 'filter-control--destello': destello > 0 }"
+                />
               </div>
 
               <div v-if="reporte.needsDias" class="filter-group">
@@ -73,6 +87,7 @@
                   min="1"
                   max="365"
                   class="filter-control"
+                  :class="{ 'filter-control--cambiado': Number(filtros.dias) !== 30 }"
                 />
               </div>
 
@@ -82,6 +97,7 @@
                   :id="`propietario-${reporte.id}`"
                   v-model="filtros.propietarioId"
                   class="filter-control"
+                  :class="{ 'filter-control--cambiado': filtros.propietarioId }"
                   :disabled="cargandoPropietarios"
                 >
                   <option value="">
@@ -107,6 +123,7 @@
                   max="100"
                   step="0.01"
                   class="filter-control"
+                  :class="{ 'filter-control--cambiado': Number(filtros.porcentajeAdmin) > 0 }"
                 />
                 <small class="filter-hint">Se descuenta de los ingresos de propietarios que no son propios.</small>
               </div>
@@ -114,6 +131,14 @@
 
             <p v-else class="reporte-panel__empty-filter">
               Este reporte no necesita filtros adicionales.
+            </p>
+
+            <p v-if="resumenFiltros(reporte).length" class="reporte-resumen">
+              Se generará con:
+              <template v-for="(parte, i) in resumenFiltros(reporte)" :key="parte.etiqueta">
+                <span v-if="i" class="reporte-resumen__sep">·</span>
+                {{ parte.etiqueta }} <strong>{{ parte.valor }}</strong>
+              </template>
             </p>
 
             <div class="reporte-actions">
@@ -150,7 +175,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted } from 'vue'
+import { reactive, ref, onMounted, watch } from 'vue'
 import Swal from 'sweetalert2'
 import { useAppTheme } from '@/composables/useAppTheme'
 import api from '@/services/api'
@@ -162,6 +187,7 @@ const { isDark } = useAppTheme()
 const generando = ref('')
 const STORAGE_KEY_REPORTE_ABIERTO = 'rentacar:reportes:reporte-abierto'
 const reporteAbierto = ref('')
+const destello = ref(0)
 
 const filtros = reactive({
   periodo: 'mes',
@@ -291,30 +317,53 @@ function toggleReporte(id) {
   localStorage.setItem(STORAGE_KEY_REPORTE_ABIERTO, reporteAbierto.value)
 }
 
-function seleccionarPeriodo(valor) {
-  filtros.periodo = valor
+function rangoPeriodo(valor) {
   const hoy = new Date()
-
-  if (valor === 'personalizado') return
-
-  if (valor === 'mes') {
-    filtros.fechaInicio = fechaISO(new Date(hoy.getFullYear(), hoy.getMonth(), 1))
-    filtros.fechaFin = fechaISO(hoy)
-    return
-  }
-
+  if (valor === 'mes') return { inicio: fechaISO(new Date(hoy.getFullYear(), hoy.getMonth(), 1)), fin: fechaISO(hoy) }
   if (valor === 'trimestral') {
     const inicio = new Date(hoy)
     inicio.setMonth(hoy.getMonth() - 3)
-    filtros.fechaInicio = fechaISO(inicio)
-    filtros.fechaFin = fechaISO(hoy)
-    return
+    return { inicio: fechaISO(inicio), fin: fechaISO(hoy) }
   }
+  if (valor === 'anual') return { inicio: fechaISO(new Date(hoy.getFullYear(), 0, 1)), fin: fechaISO(hoy) }
+  return null
+}
 
-  if (valor === 'anual') {
-    filtros.fechaInicio = fechaISO(new Date(hoy.getFullYear(), 0, 1))
-    filtros.fechaFin = fechaISO(hoy)
+function seleccionarPeriodo(valor) {
+  filtros.periodo = valor
+  const rango = rangoPeriodo(valor)
+  if (!rango) return
+  filtros.fechaInicio = rango.inicio
+  filtros.fechaFin = rango.fin
+  destello.value++
+}
+
+// si se cambia una fecha a mano ya no es "este mes": se marca personalizado
+watch(() => [filtros.fechaInicio, filtros.fechaFin], ([inicio, fin]) => {
+  const rango = rangoPeriodo(filtros.periodo)
+  if (rango && (rango.inicio !== inicio || rango.fin !== fin)) filtros.periodo = 'personalizado'
+})
+
+function fechaCorta(iso) {
+  if (!iso) return '—'
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('es-SV', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+// lo que se va a mandar al reporte, para que se vea que el filtro si cambio
+function resumenFiltros(reporte) {
+  const partes = []
+  if (reporte.needsPeriod) {
+    const periodo = periodos.find((p) => p.value === filtros.periodo)?.label || 'Personalizado'
+    partes.push({ etiqueta: `${periodo}:`, valor: `${fechaCorta(filtros.fechaInicio)} – ${fechaCorta(filtros.fechaFin)}` })
   }
+  if (reporte.needsDias) partes.push({ etiqueta: 'Licencias que vencen en', valor: `${filtros.dias || 0} días` })
+  if (reporte.needsPropietario) {
+    const prop = propietarios.value.find((p) => String(p.id) === filtros.propietarioId)
+    partes.push({ etiqueta: 'Propietario:', valor: prop ? prop.nombre : 'Todos' })
+  }
+  if (reporte.needsPorcentaje) partes.push({ etiqueta: 'Administración:', valor: `${Number(filtros.porcentajeAdmin) || 0}%` })
+  return partes
 }
 
 function limpiarFiltros(reporte) {
@@ -602,6 +651,48 @@ onMounted(() => {
 .filter-control:focus {
   border-color: #c0392b;
   box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.12);
+}
+
+/* filtro distinto al valor por defecto */
+.filter-control--cambiado {
+  border-color: #c0392b;
+  background: #fdf3f2;
+}
+
+.reporte-item--dark .filter-control--cambiado {
+  border-color: #f0a500;
+  background: rgba(240, 165, 0, 0.08);
+}
+
+/* al elegir un periodo las fechas parpadean para que se note que cambiaron */
+.filter-control--destello {
+  animation: destello-fecha 0.7s ease;
+}
+
+@keyframes destello-fecha {
+  0% { box-shadow: 0 0 0 4px rgba(192, 57, 43, 0.35); }
+  100% { box-shadow: 0 0 0 0 rgba(192, 57, 43, 0); }
+}
+
+.reporte-resumen {
+  margin: -0.25rem 0 1.1rem;
+  color: #64748b;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.reporte-resumen strong {
+  color: #922b21;
+  font-weight: 700;
+}
+
+.reporte-item--dark .reporte-resumen strong {
+  color: #f0a500;
+}
+
+.reporte-resumen__sep {
+  margin: 0 0.4rem;
+  opacity: 0.5;
 }
 
 .filter-control:disabled {

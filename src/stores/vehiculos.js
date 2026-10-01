@@ -106,6 +106,37 @@ export const useVehiculosStore = defineStore('vehiculos', () => {
     }
   }
 
+  // para filtros que el back no tiene (categoria, propietario): se traen todos y se pagina aqui
+  async function fetchVehiculosFiltrados(params = {}, filtrar, page = 1, perPage = 15) {
+    loading.value = true
+    error.value = null
+    try {
+      const filtros = { ...params }
+      delete filtros.page
+      const { items } = await fetchAllPaginated((p) => api.get('/admin/vehiculos', { params: p }), filtros)
+      const visibles = items.filter(filtrar)
+      const total = visibles.length
+      const lastPage = Math.max(1, Math.ceil(total / perPage))
+      const actual = Math.min(Math.max(1, Number(page) || 1), lastPage)
+      const inicio = (actual - 1) * perPage
+      vehiculos.value = visibles.slice(inicio, inicio + perPage)
+      pagination.value = {
+        current_page: actual,
+        last_page: lastPage,
+        per_page: perPage,
+        total,
+        from: total ? inicio + 1 : 0,
+        to: inicio + vehiculos.value.length,
+      }
+    } catch (e) {
+      error.value = e.response?.data?.message || 'Error al cargar vehículos.'
+      vehiculos.value = []
+      pagination.value = normalizePagination(null)
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function fetchCatalogos(force = false) {
     if (!force && catalogosCargados.marcas && catalogosCargados.categorias && catalogosCargados.propietarios) {
       return { marcas: marcas.value, categorias: categorias.value, propietarios: propietarios.value }
@@ -230,6 +261,7 @@ export const useVehiculosStore = defineStore('vehiculos', () => {
     catalogosCargando,
     todosVehiculos,
     fetchVehiculos,
+    fetchVehiculosFiltrados,
     fetchCatalogos,
     fetchModelos,
     fetchTodosVehiculos,

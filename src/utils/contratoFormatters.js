@@ -89,6 +89,15 @@ export function nombreVehiculo(v) {
   return [marca, modelo].filter(Boolean).join(' ') || v.placa
 }
 
+// yyyy-mm-dd en hora local de una fecha con hora del back (viene en utc)
+export function fechaLocalISO(valor) {
+  if (!valor) return ''
+  const d = new Date(valor)
+  if (Number.isNaN(d.getTime())) return fechaSoloISO(valor)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
 export function calcularDias(fechaEntrega, fechaDevolucion) {
   if (!fechaEntrega || !fechaDevolucion) return 0
   const d1 = new Date(fechaEntrega.slice(0, 10) + 'T00:00:00')

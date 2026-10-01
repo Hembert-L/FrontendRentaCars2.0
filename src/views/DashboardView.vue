@@ -2,7 +2,7 @@
   <div
     class="min-h-screen transition-colors"
     :class="isDark ? 'bg-gray-950' : 'bg-gray-50'"
-    style="font-family: &quot;Sora&quot;, sans-serif"
+    style="font-family: &quot;Montserrat&quot;, sans-serif"
   >
     <!-- Loading -->
     <div v-if="loading" class="flex items-center justify-center h-64">
@@ -525,6 +525,5 @@ function estadoBadge(estado) {
 </script>
 
 <style scoped>
-@import url("https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&display=swap");
 </style>
 

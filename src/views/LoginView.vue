@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen flex flex-col lg:flex-row login-page" style="font-family: 'Sora', sans-serif;">
+  <div class="min-h-screen flex flex-col lg:flex-row login-page" style="font-family: 'Montserrat', sans-serif;">
     <div class="hidden lg:flex lg:w-[45%] relative overflow-hidden bg-[#1a0505]">
       <div class="absolute inset-0 grid grid-cols-4 grid-rows-4 login-pattern">
         <div class="bg-[#f0a500]" />
@@ -157,7 +157,6 @@ async function handleLogin() {
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&display=swap');
 
 .login-page {
   animation: login-fade-in 0.45s ease-out;

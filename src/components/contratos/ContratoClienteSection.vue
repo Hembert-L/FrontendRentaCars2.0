@@ -84,20 +84,6 @@
       </div>
 
       <div
-        v-else-if="sinReserva"
-        class="rounded-xl border p-4"
-        :class="isDark ? 'border-green-900/50 bg-green-950/20' : 'border-green-200 bg-green-50'"
-      >
-        <p class="text-sm font-bold flex items-center gap-2" :class="isDark ? 'text-green-300' : 'text-green-900'">
-          <i class="pi pi-bolt"></i>
-          Contrato sin reserva
-        </p>
-        <p class="text-xs mt-2 leading-relaxed" :class="isDark ? 'text-green-200/80' : 'text-green-800'">
-          Este cliente no tiene reservas activas. Puedes continuar y crear un contrato directo con un vehículo disponible.
-        </p>
-      </div>
-
-      <div
         v-else-if="reservas.length && !reservaSeleccionada"
         class="rounded-xl border p-4 space-y-3"
         :class="isDark ? 'border-amber-900/50 bg-amber-950/20' : 'border-amber-200 bg-amber-50'"

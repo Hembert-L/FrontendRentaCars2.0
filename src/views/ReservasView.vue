@@ -31,10 +31,10 @@
 
     <!-- Filtros -->
     <div
-      class="rounded-2xl border shadow-sm p-4 mb-5 flex flex-col sm:flex-row gap-3"
+      class="rounded-2xl border shadow-sm p-4 mb-5 flex flex-col sm:flex-row sm:flex-wrap gap-3"
       :class="isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'"
     >
-      <div class="relative flex-1">
+      <div class="relative flex-1 min-w-[220px]">
         <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-sm pointer-events-none" :class="isDark ? 'text-gray-500' : 'text-gray-400'"></i>
         <input
           v-model="search"
@@ -58,6 +58,42 @@
         <option value="CONFIRMADA">Confirmada</option>
         <option value="CONCLUIDA">Concluida</option>
       </select>
+      <select
+        v-model="filtroInicio"
+        class="px-4 py-2.5 rounded-xl border text-sm focus:outline-none min-w-[170px]"
+        :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-100' : 'border-gray-200 bg-gray-50'"
+      >
+        <option value="">Cualquier inicio</option>
+        <option value="hoy">Inician hoy</option>
+        <option value="semana">Próximos 7 días</option>
+        <option value="pasadas">Ya iniciaron</option>
+      </select>
+      <div class="flex items-center gap-2">
+        <label class="text-xs font-semibold whitespace-nowrap" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Inicio desde</label>
+        <input
+          v-model="filtroDesde"
+          type="date"
+          class="px-3 py-2.5 rounded-xl border text-sm focus:outline-none"
+          :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-100' : 'border-gray-200 bg-gray-50'"
+        />
+        <label class="text-xs font-semibold" :class="isDark ? 'text-gray-400' : 'text-gray-500'">hasta</label>
+        <input
+          v-model="filtroHasta"
+          type="date"
+          :min="filtroDesde || undefined"
+          class="px-3 py-2.5 rounded-xl border text-sm focus:outline-none"
+          :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-100' : 'border-gray-200 bg-gray-50'"
+        />
+      </div>
+      <button
+        v-if="search || filtroEstado || hayFiltroFechas"
+        type="button"
+        class="text-xs font-bold underline self-center"
+        style="color:#c0392b;"
+        @click="limpiarFiltros"
+      >
+        Limpiar filtros
+      </button>
     </div>
 
     <div
@@ -151,6 +187,7 @@
                         ? 'border-green-900/50 bg-green-950/30 text-green-400 hover:bg-green-950/50'
                         : 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'"
                       title="Generar contrato"
+                      data-label="Generar contrato"
                     >
                       <i class="pi pi-file-edit text-xs"></i>
                     </router-link>
@@ -163,6 +200,7 @@
                         ? 'border-green-900/50 bg-green-950/30 text-green-400'
                         : 'border-green-200 bg-green-50 text-green-700'"
                       :title="motivoSinContrato(r)"
+                      data-label="Generar contrato"
                     >
                       <i class="pi pi-file-edit text-xs"></i>
                     </button>
@@ -176,6 +214,7 @@
                         !puedeEditarReserva(r) ? 'opacity-40 cursor-not-allowed' : '',
                       ]"
                       :title="puedeEditarReserva(r) ? 'Actualizar fechas' : 'Solo las reservas pendientes permiten actualizar fechas'"
+                      data-label="Cambiar fechas"
                       :disabled="!puedeEditarReserva(r)"
                       @click="abrirModalEditar(r)"
                     >
@@ -192,6 +231,7 @@
                       : 'border-red-200 bg-white text-red-600 hover:bg-red-50'"
                     @click="abrirModalCancelar(r)"
                   >
+                    <i class="pi pi-times text-xs"></i>
                     Cancelar
                   </button>
                 </div>
@@ -285,7 +325,7 @@ import ReservaCancelarModal from '@/components/reservas/ReservaCancelarModal.vue
 import ReservasCanceladasModal from '@/components/reservas/ReservasCanceladasModal.vue'
 import { useReservasStore } from '@/stores/reservas'
 import { useAppTheme } from '@/composables/useAppTheme'
-import { formatFecha, fechaHoyLocal, fechaSoloISO } from '@/utils/reservaFormatters'
+import { formatFecha, fechaHoyLocal, fechaSoloISO, sumarDiasISO } from '@/utils/reservaFormatters'
 import { toastSuccess } from '@/utils/toast'
 import api from '@/services/api'
 import { fetchAllPaginated } from '@/utils/apiPagination'
@@ -295,6 +335,9 @@ const store = useReservasStore()
 
 const search                  = ref('')
 const filtroEstado              = ref('')
+const filtroInicio              = ref('')
+const filtroDesde               = ref('')
+const filtroHasta               = ref('')
 const modalAbierto              = ref(false)
 const modalCancelarAbierto        = ref(false)
 const modalCanceladasAbierto      = ref(false)
@@ -316,7 +359,7 @@ let searchTimer = null
 
 onMounted(() => cargarReservas())
 
-watch([search, filtroEstado], () => {
+watch([search, filtroEstado, filtroInicio, filtroDesde, filtroHasta], () => {
   clearTimeout(searchTimer)
   searchTimer = setTimeout(() => cargarReservas(1), 300)
 })
@@ -335,9 +378,34 @@ function reservasParams(page = pagination.value.current_page || 1) {
 }
 
 function pedirReservas(page) {
+  // con filtro de fechas se traen todas y se filtra aqui, el back no filtra por fecha
+  if (hayFiltroFechas.value) {
+    return store.fetchReservasSinCanceladas(reservasParams(page), page, 10, coincideFechas)
+  }
   return filtroEstado.value
     ? store.fetchReservas(reservasParams(page))
     : store.fetchReservasSinCanceladas(reservasParams(page), page)
+}
+
+const hayFiltroFechas = computed(() => Boolean(filtroInicio.value || filtroDesde.value || filtroHasta.value))
+
+function coincideFechas(r) {
+  const inicio = fechaSoloISO(r.fecha_inicio)
+  const hoy = fechaHoyLocal()
+  if (filtroInicio.value === 'hoy' && inicio !== hoy) return false
+  if (filtroInicio.value === 'semana' && (inicio < hoy || inicio > sumarDiasISO(hoy, 7))) return false
+  if (filtroInicio.value === 'pasadas' && inicio >= hoy) return false
+  if (filtroDesde.value && inicio < filtroDesde.value) return false
+  if (filtroHasta.value && inicio > filtroHasta.value) return false
+  return true
+}
+
+function limpiarFiltros() {
+  search.value = ''
+  filtroEstado.value = ''
+  filtroInicio.value = ''
+  filtroDesde.value = ''
+  filtroHasta.value = ''
 }
 
 async function cargarReservas(page = pagination.value.current_page || 1) {
@@ -544,34 +612,46 @@ function tipoStyle(tipo) {
 </script>
 
 <style scoped>
-.acciones-piramide {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.35rem;
-  min-width: 4.5rem;
-}
-
+/* Acciones apiladas: una debajo de otra, todas del mismo ancho y alineadas a la izquierda. */
+.acciones-piramide,
 .acciones-piramide__top {
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.3rem;
+}
+
+.acciones-piramide {
+  width: 9.5rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.acciones-piramide__top > a,
+.acciones-piramide__top > button,
+.acciones-piramide__cancelar {
+  display: flex !important;
   align-items: center;
-  justify-content: center;
-  gap: 0.375rem;
+  justify-content: flex-start !important;
+  gap: 0.45rem;
+  width: 100% !important;
+  height: 2rem;
+  padding: 0 0.65rem !important;
+  border-radius: var(--radio-control);
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: all 0.15s ease;
 }
 
 .acciones-piramide__cancelar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.2rem 0.55rem;
-  border-radius: 0.5rem;
   border-width: 1px;
   border-style: solid;
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  transition: all 0.15s ease;
-  white-space: nowrap;
+}
+
+.acciones-piramide__cancelar:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .pagination-btn {

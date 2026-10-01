@@ -46,16 +46,6 @@
               {{ contrato.observaciones_entrega || "Sin observaciones registradas en la entrega." }}
             </div>
           </div>
-          <div class="cierre-field">
-            <label>Estado y observaciones al recibir</label>
-            <textarea
-              v-model="observacionesRecepcion"
-              :disabled="operacionEnCurso"
-              rows="3"
-              class="cierre-input"
-              placeholder="Describe rayones, golpes, limpieza u otros detalles..."
-            ></textarea>
-          </div>
         </section>
 
         <div class="cierre-grid-2">
@@ -503,7 +493,6 @@ const operacionEnCurso = computed(() =>
   guardandoCargos.value || guardandoIncidencias.value || recargando.value || cerrando.value || cobrando.value,
 );
 const salidaConfirmada = ref(false);
-const observacionesRecepcion = ref("");
 const nivelRecepcion = ref("1/2");
 const cargos = ref([]);
 const cargosRegistrados = ref([]);
@@ -1185,7 +1174,6 @@ async function cerrarRenta() {
       fecha_hora_recepcion: fechaHoraActualApi(),
       nivel_combustible_recepcion: nivelRecepcion.value,
       estado_vehiculo_recepcion: "RECIBIDO",
-      observaciones: observacionesRecepcion.value || null,
       aplicar_cargo_retraso: aplicaRetrasoAlCerrar.value,
     };
     if (conDeuda) {

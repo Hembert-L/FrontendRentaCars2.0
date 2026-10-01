@@ -88,8 +88,8 @@
 
               <!-- Rol -->
               <td class="px-5 py-4">
-                <span class="text-xs font-bold px-2.5 py-1 rounded-full" :style="rolStyle(rolNombre(usuario))">
-                  <i :class="['pi', rolIcon(rolNombre(usuario)), 'mr-1 text-[10px]']"></i>
+                <span class="rol-badge" :style="rolStyle(rolNombre(usuario))">
+                  <i :class="['pi', rolIcon(rolNombre(usuario)), 'text-[10px]']"></i>
                   {{ rolNombre(usuario) }}
                 </span>
               </td>
@@ -100,8 +100,9 @@
                   v-if="!esAdministrador(usuario)"
                   :value="usuario.estado"
                   @change="$emit('cambiar-estado', usuario, $event.target.value)"
-                  class="text-xs font-bold px-2.5 py-1.5 rounded-full border-0 outline-none cursor-pointer transition-all"
+                  class="estado-select"
                   :style="estadoStyle(usuario.estado)"
+                  title="Cambiar estado"
                 >
                   <option value="ACTIVO">Activo</option>
                   <option value="INACTIVO">Inactivo</option>
@@ -109,7 +110,7 @@
                 </select>
                 <span
                   v-else
-                  class="text-xs font-bold px-2.5 py-1.5 rounded-full inline-block"
+                  class="estado-badge"
                   :style="estadoStyle(usuario.estado)"
                   title="El estado de un administrador no se puede modificar"
                 >
@@ -124,6 +125,7 @@
                   class="w-8 h-8 rounded-lg flex items-center justify-center border transition-all hover:shadow-sm"
                   :class="isDark ? 'border-gray-700 text-gray-400 hover:bg-gray-800' : 'border-gray-200 text-gray-500 hover:bg-gray-50'"
                   title="Editar"
+                  data-label="Editar"
                 ><i class="pi pi-pencil text-xs"></i></button>
               </td>
             </tr>
@@ -235,11 +237,12 @@ function rolIcon(rol) {
 
 function estadoStyle(estado) {
   const map = {
-    'ACTIVO':    'background:#dcfce7; color:#166534;',
-    'INACTIVO':  'background:#fee2e2; color:#991b1b;',
-    'BLOQUEADO': 'background:#fef9c3; color:#854d0e;',
+    // background-color (no `background`) para no borrar la flecha del selector
+    'ACTIVO':    'background-color:#dcfce7; color:#166534;',
+    'INACTIVO':  'background-color:#fee2e2; color:#991b1b;',
+    'BLOQUEADO': 'background-color:#fef9c3; color:#854d0e;',
   }
-  return map[estado] || 'background:#f3f4f6; color:#4b5563;'
+  return map[estado] || 'background-color:#f3f4f6; color:#4b5563;'
 }
 
 function labelEstado(estado) {
@@ -300,5 +303,34 @@ function labelEstado(estado) {
   text-align: center;
   font-size: 0.75rem;
   font-weight: 700;
+}
+
+/* Selector de estado con el mismo aspecto que las etiquetas de estado: punto de color + texto (ver main.css). */
+.estado-select {
+  appearance: none;
+  padding: 0.15rem 1.1rem 0.15rem 0.85rem;
+  border: 0 !important;
+  background-color: transparent !important;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  /* punto a la izquierda y flecha a la derecha, ambos del color del estado */
+  background-image: radial-gradient(circle, currentColor 0.2rem, transparent 0.23rem),
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: 0 50%, calc(100% - 0.5rem) 55%, calc(100% - 0.2rem) 55%;
+  background-size: 0.45rem 0.45rem, 0.3rem 0.3rem, 0.3rem 0.3rem;
+  background-repeat: no-repeat;
+}
+
+.estado-select:focus-visible {
+  box-shadow: 0 0 0 2px rgba(192, 57, 43, 0.35);
+}
+
+.estado-select option {
+  text-transform: none;
+  color: #111827;
+  background: #fff;
 }
 </style>
