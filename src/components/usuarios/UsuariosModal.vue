@@ -52,7 +52,7 @@
               <label class="field-label" :class="isDark ? 'text-gray-400' : 'text-gray-600'">Correo electrónico</label>
               <div class="relative">
                 <i class="pi pi-envelope input-icon" :class="isDark ? 'text-gray-500' : 'text-gray-400'"></i>
-                <input v-model="form.correo" type="email"
+                <input v-model="form.correo" type="email" maxlength="150"
                   class="field-input" :class="[errors.correo ? 'error' : '', isDark ? 'field-input-dark' : 'field-input-light']" />
               </div>
               <p v-if="errors.correo" class="field-error">{{ errors.correo }}</p>
@@ -112,6 +112,7 @@
                 <input
                   v-model="form.password"
                   :type="showPassword ? 'text' : 'password'"
+                  maxlength="255"
                   autocomplete="new-password"
                   :placeholder="modoEdicion ? 'Déjala vacía para no cambiarla' : 'Mínimo 8 caracteres'"
                   class="field-input pr-10"
@@ -165,6 +166,8 @@ const props = defineProps({
   visible:     Boolean,
   modoEdicion: Boolean,
   usuario:     Object,
+  // { errors, message } que devolvió el backend al guardar; se muestran en el formulario
+  erroresServidor: { type: Object, default: null },
 })
 
 const emit = defineEmits(['guardar', 'cerrar'])
@@ -184,6 +187,16 @@ const form = reactive({
 const errors = reactive({ nombre: '', apellido: '', correo: '', rol: '', password: '' })
 
 const esAdminUsuario = computed(() => props.modoEdicion && esAdministrador(props.usuario))
+
+// Si el backend rechaza el guardado, cada mensaje va debajo de su campo y el primero arriba de los botones
+watch(() => props.erroresServidor, (resp) => {
+  if (!resp) return
+  const errs = resp.errors || {}
+  Object.keys(errors).forEach((k) => {
+    errors[k] = Array.isArray(errs[k]) ? errs[k][0] : (errs[k] || '')
+  })
+  globalError.value = Object.values(errs).flat().find(Boolean) || resp.message || 'No se pudo guardar el usuario.'
+})
 
 watch(() => props.visible, (val) => {
   if (!val) return

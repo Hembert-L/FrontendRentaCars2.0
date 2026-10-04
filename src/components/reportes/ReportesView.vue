@@ -175,13 +175,14 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted, watch } from 'vue'
+import { reactive, ref, computed, onMounted, watch } from 'vue'
 import Swal from 'sweetalert2'
 import { useAppTheme } from '@/composables/useAppTheme'
 import api from '@/services/api'
 import { fetchAllPaginated } from '@/utils/apiPagination'
 import { abrirPdf, descargarPdf } from '@/utils/pdfDownload'
 import { toastSuccess } from '@/utils/toast'
+import { useAuthStore } from '@/stores/auth'
 
 const { isDark } = useAppTheme()
 const generando = ref('')
@@ -221,7 +222,7 @@ function labelTipoPropietario(tipo) {
   return labels[tipo] || String(tipo).toLowerCase()
 }
 
-const reportes = [
+const catalogoReportes = [
   {
     id: 'desempeno-general',
     titulo: 'Desempeño general',
@@ -304,6 +305,15 @@ const reportes = [
     endpoint: '/admin/reportes/saldos-pendientes',
   },
 ]
+
+// el empleado solo ve reportes sin montos de dinero (coincide con ReporteController del back)
+const REPORTES_EMPLEADO = ['estado-flota', 'licencias-por-vencer', 'reservas-canceladas']
+const authStore = useAuthStore()
+const reportes = computed(() => {
+  const roles = authStore.userRoles
+  const veTodo = roles.includes('ADMINISTRADOR') || roles.includes('CONTADOR')
+  return veTodo ? catalogoReportes : catalogoReportes.filter((r) => REPORTES_EMPLEADO.includes(r.id))
+})
 
 const periodos = [
   { value: 'mes', label: 'Este mes' },
@@ -458,7 +468,7 @@ onMounted(() => {
   seleccionarPeriodo('mes')
   cargarPropietarios()
   const reporteGuardado = localStorage.getItem(STORAGE_KEY_REPORTE_ABIERTO)
-  if (reportes.some((reporte) => reporte.id === reporteGuardado)) {
+  if (reportes.value.some((reporte) => reporte.id === reporteGuardado)) {
     reporteAbierto.value = reporteGuardado
   }
 })

@@ -24,7 +24,7 @@
         <label class="text-xs font-semibold mb-1 block" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Devolución - fecha</label>
         <div class="relative">
           <i class="pi pi-calendar input-icon"></i>
-          <input :value="fechaDevolucion" type="date" :min="bloqueado ? undefined : minFechaDevolucion" :disabled="bloqueado" class="field-input" @input="$emit('update:fechaDevolucion', $event.target.value)" />
+          <input :value="fechaDevolucion" type="date" :min="bloqueado ? undefined : minFechaDevolucion" :max="bloqueado ? undefined : fechaMaxima" :disabled="bloqueado" class="field-input" @input="$emit('update:fechaDevolucion', $event.target.value)" />
         </div>
       </div>
     </div>
@@ -133,6 +133,9 @@ import { computed, ref, watch } from 'vue'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { nombreVehiculo, formatPrecio } from '@/utils/contratoFormatters'
 import { fechaHoyLocal, sumarDiasISO } from '@/utils/reservaFormatters'
+import { fechaMaximaPermitida } from '@/utils/rangoFechas'
+
+const fechaMaxima = fechaMaximaPermitida()
 
 const props = defineProps({
   fechaEntrega:    { type: String, default: '' },

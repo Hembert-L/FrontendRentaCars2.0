@@ -71,6 +71,7 @@
                   v-model="form.fecha_inicio"
                   type="date"
                   :min="manana"
+                  :max="fechaMaxima"
                   class="field-input w-full"
                   :class="errors.fecha_inicio ? 'error' : ''"
                   />
@@ -82,6 +83,7 @@
                   v-model="form.fecha_fin"
                   type="date"
                   :min="form.fecha_inicio ? sumarDiasISO(form.fecha_inicio, 1) : manana"
+                  :max="fechaMaxima"
                   class="field-input w-full"
                   :class="errors.fecha_fin ? 'error' : ''"
                 />
@@ -124,6 +126,9 @@
 import { ref, computed, watch } from 'vue'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { nombreVehiculo, fechaHoyLocal, sumarDiasISO } from '@/utils/reservaFormatters'
+import { fechaMaximaPermitida, pasaFechaMaxima, mensajeFechaMaxima } from '@/utils/rangoFechas'
+
+const fechaMaxima = fechaMaximaPermitida()
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -181,6 +186,12 @@ function validar() {
   }
   if (form.value.fecha_inicio && form.value.fecha_fin && form.value.fecha_fin <= form.value.fecha_inicio) {
     errors.value.fecha_fin = 'Debe ser posterior al inicio'
+  }
+  if (!errors.value.fecha_inicio && pasaFechaMaxima(form.value.fecha_inicio)) {
+    errors.value.fecha_inicio = mensajeFechaMaxima()
+  }
+  if (!errors.value.fecha_fin && pasaFechaMaxima(form.value.fecha_fin)) {
+    errors.value.fecha_fin = mensajeFechaMaxima()
   }
   return Object.keys(errors.value).length === 0
 }

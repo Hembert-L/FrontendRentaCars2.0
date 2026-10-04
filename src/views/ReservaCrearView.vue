@@ -114,6 +114,7 @@ import { useReservasStore } from "@/stores/reservas";
 import { useAppTheme } from "@/composables/useAppTheme";
 import { fechaHoyLocal, sumarDiasISO, diasEntreFechasISO } from "@/utils/reservaFormatters";
 import { documentosVigentes } from "@/utils/contratoFormatters";
+import { pasaFechaMaxima, mensajeFechaMaxima } from "@/utils/rangoFechas";
 import { toastSuccess } from "@/utils/toast";
 
 const router = useRouter();
@@ -333,6 +334,14 @@ function validarFechas() {
   }
   if (fechaFin.value <= fechaInicio.value) {
     errorFechaFin.value = "Debe ser posterior a la fecha de inicio.";
+    return false;
+  }
+  if (pasaFechaMaxima(fechaInicio.value)) {
+    errorFechaInicio.value = mensajeFechaMaxima();
+    return false;
+  }
+  if (pasaFechaMaxima(fechaFin.value)) {
+    errorFechaFin.value = mensajeFechaMaxima();
     return false;
   }
   return true;

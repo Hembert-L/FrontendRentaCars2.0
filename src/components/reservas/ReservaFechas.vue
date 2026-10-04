@@ -17,6 +17,7 @@
             :value="fechaInicio"
             type="date"
             :min="minFechaInicio || hoy"
+            :max="fechaMaxima"
             class="field-input"
             :class="errorInicio ? 'error' : ''"
             @input="$emit('update:fechaInicio', $event.target.value); $emit('update:tipoReserva', 'ANTISIPADA'); $emit('change')"
@@ -32,6 +33,7 @@
             :value="fechaFin"
             type="date"
             :min="fechaInicio ? sumarUnDia(fechaInicio) : minFechaInicio || hoy"
+            :max="fechaMaxima"
             class="field-input"
             :class="errorFin ? 'error' : ''"
             @input="$emit('update:fechaFin', $event.target.value); $emit('change')"
@@ -57,6 +59,9 @@
 <script setup>
 import { useAppTheme } from '@/composables/useAppTheme'
 import { formatFecha, sumarDiasISO } from '@/utils/reservaFormatters'
+import { fechaMaximaPermitida } from '@/utils/rangoFechas'
+
+const fechaMaxima = fechaMaximaPermitida()
 
 defineProps({
   fechaInicio:  { type: String, default: '' },

@@ -87,6 +87,7 @@
         <p v-if="mensajeReservaTraslapada" class="wizard-error">{{ mensajeReservaTraslapada }}</p>
         <p v-if="mensajeVehiculoReserva" class="wizard-error">{{ mensajeVehiculoReserva }}</p>
         <p v-if="mensajeDiaEntrega" class="wizard-error">{{ mensajeDiaEntrega }}</p>
+        <p v-if="mensajeFechaDevolucion" class="wizard-error">{{ mensajeFechaDevolucion }}</p>
 
         <!-- Navegación -->
         <div class="wizard-nav">
@@ -150,6 +151,7 @@ import { useReservasStore } from '@/stores/reservas'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { calcularDias, documentosVigentes, reservaChocaConContratoDirecto } from '@/utils/contratoFormatters'
 import { fechaHoyLocal, formatFecha } from '@/utils/reservaFormatters'
+import { pasaFechaMaxima, mensajeFechaMaxima } from '@/utils/rangoFechas'
 import { toastSuccess } from '@/utils/toast'
 
 const router = useRouter()
@@ -260,6 +262,10 @@ const mensajeVehiculoReserva = computed(() => {
   if (vehiculoSel.value.estado === 'DISPONIBLE') return ''
   return `El vehículo de esta reserva no está disponible (estado actual: ${vehiculoSel.value.estado}). No se puede generar el contrato hasta que vuelva a estar disponible.`
 })
+// en contrato directo la devolución no puede pasar el límite de fechas (31/12 de dentro de dos años)
+const mensajeFechaDevolucion = computed(() =>
+  !esDesdeReserva.value && pasaFechaMaxima(fechaDevolucion.value) ? `Devolución: ${mensajeFechaMaxima()}` : '',
+)
 const precioDia = computed(() => Number(vehiculoSel.value?.categoria?.precio_dia || 0))
 const totalEstimado = computed(() => Math.max(0, dias.value * precioDia.value - descuento.value))
 const docsOk = computed(() => documentosVigentes(cliente.value).ok)
@@ -279,7 +285,8 @@ const paso2Ok = computed(() =>
   precioDia.value > 0 &&
   !reservaTraslapada.value &&
   !mensajeVehiculoReserva.value &&
-  !mensajeDiaEntrega.value,
+  !mensajeDiaEntrega.value &&
+  !mensajeFechaDevolucion.value,
 )
 const puedeGenerar = computed(() => paso1Ok.value && paso2Ok.value && dias.value > 0)
 

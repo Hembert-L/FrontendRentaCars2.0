@@ -69,6 +69,7 @@
       :visible="modalAbierto"
       :modo-edicion="modoEdicion"
       :usuario="usuarioSeleccionado"
+      :errores-servidor="erroresServidor"
       @guardar="guardarUsuario"
       @cerrar="modalAbierto = false"
     />
@@ -90,6 +91,7 @@ const search = ref('')
 const filtroActivo = ref('todos')
 const filtroEstado = ref('')
 const modalAbierto = ref(false)
+const erroresServidor = ref(null)
 const modoEdicion = ref(false)
 const usuarioSeleccionado = ref(null)
 const paginaActual = ref(1)
@@ -189,12 +191,20 @@ async function cambiarEstado(usuario, nuevoEstado) {
 }
 
 async function guardarUsuario(form) {
-  if (modoEdicion.value) {
-    await store.actualizar(form)
-  } else {
-    await store.crear(form)
+  erroresServidor.value = null
+  try {
+    if (modoEdicion.value) {
+      await store.actualizar(form)
+    } else {
+      await store.crear(form)
+    }
+    modalAbierto.value = false
+  } catch (e) {
+    // el modal sigue abierto y muestra lo que rechazó el backend
+    erroresServidor.value = {
+      errors: e.response?.data?.errors || {},
+      message: e.response?.data?.message || 'No se pudo guardar el usuario.',
+    }
   }
-
-  modalAbierto.value = false
 }
 </script>

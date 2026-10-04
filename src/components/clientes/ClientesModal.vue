@@ -44,7 +44,7 @@
               <label class="field-label">Nombre completo</label>
               <div class="relative">
                 <i class="pi pi-user input-icon"></i>
-                <input v-model.trim="form.nombre" type="text" class="field-input" :class="errors.nombre ? 'error' : ''" autocomplete="name" @blur="normalizarNombreEnFormulario" />
+                <input v-model.trim="form.nombre" type="text" maxlength="100" class="field-input" :class="errors.nombre ? 'error' : ''" autocomplete="name" @blur="normalizarNombreEnFormulario" />
               </div>
               <p v-if="errors.nombre" class="field-error">{{ errors.nombre }}</p>
             </div>

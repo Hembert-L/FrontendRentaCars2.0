@@ -738,7 +738,8 @@ const ordenEstadosVehiculo = {
 };
 const nombreFlexibleRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 ./'-]+$/;
 const nombrePersonaRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ '-]+$/;
-const contieneLetraRegex = /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/;
+const nombreCategoriaRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ '-]*$/;
+const nombreMarcaRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ .'&-]*$/;
 const vehiculos = computed(() => store.vehiculos);
 const pagination = computed(() => store.pagination);
 const puedeRetroceder = computed(() => pagination.value.current_page > 1);
@@ -809,15 +810,15 @@ const columnasPorTab = {
     { key: "modelos_count", label: "Modelos", width: "30%" },
   ],
   categorias: [
-    { key: "nombre", label: "Nombre", width: "35%" },
-    { key: "descripcion", label: "Tarifa", width: "35%" },
-    { key: "vehiculos_count", label: "Vehículos", width: "18%" },
+    { key: "nombre", label: "Nombre", width: "28%" },
+    { key: "descripcion", label: "Tarifa", width: "28%" },
+    { key: "rango_pasajeros", label: "Pasajeros", width: "16%" },
+    { key: "vehiculos_count", label: "Vehículos", width: "16%" },
   ],
   modelos: [
-    { key: "modelo", label: "Modelo", width: "28%" },
-    { key: "marca_nombre", label: "Marca", width: "28%" },
-    { key: "capacidad_maxima", label: "Máx. pasajeros", width: "16%" },
-    { key: "vehiculos_count", label: "Vehículos", width: "16%" },
+    { key: "modelo", label: "Modelo", width: "35%" },
+    { key: "marca_nombre", label: "Marca", width: "35%" },
+    { key: "vehiculos_count", label: "Vehículos", width: "18%" },
   ],
   propietarios: [
     { key: "nombre", label: "Nombre", width: "36%" },
@@ -1128,11 +1129,14 @@ function validarNombreCatalogo(value, tipo, max = 80) {
   if (tipo === "propietario" && !nombrePersonaRegex.test(nombre)) {
     return "El nombre solo debe contener letras y signos básicos";
   }
-  if (tipo !== "propietario" && !nombreFlexibleRegex.test(nombre)) {
-    return "El nombre contiene caracteres no permitidos";
+  if (tipo === "categoria" && !nombreCategoriaRegex.test(nombre)) {
+    return "La categoría solo puede llevar letras y espacios";
   }
-  if (tipo === "categoria" && !contieneLetraRegex.test(nombre)) {
-    return "La categoría debe incluir al menos una letra";
+  if (tipo === "marca" && !nombreMarcaRegex.test(nombre)) {
+    return "La marca solo puede llevar letras, espacios, punto o guion";
+  }
+  if (tipo === "modelo" && !nombreFlexibleRegex.test(nombre)) {
+    return "El nombre contiene caracteres no permitidos";
   }
   return null;
 }
@@ -1162,7 +1166,7 @@ function renderCelda(item, key) {
     nombre: item.nombre,
     modelo: item.nombre,
     marca_nombre: item.marca?.nombre,
-    capacidad_maxima: item.capacidad_maxima,
+    rango_pasajeros: item.capacidad_minima && item.capacidad_maxima ? `${item.capacidad_minima} a ${item.capacidad_maxima}` : null,
     modelos_count: item.modelos_count ?? contarModelosPorMarca(item.id),
     vehiculos_count: item.vehiculos_count ?? contarVehiculosRelacionados(item),
     created_at: item.created_at ? formatFecha(item.created_at) : null,
@@ -1380,7 +1384,7 @@ async function accionEditar(item) {
         background: isDark.value ? "#1f2937" : "#fff",
         color: isDark.value ? "#f3f4f6" : "#111827",
         inputValidator: (value) => {
-          const errorNombre = validarNombreCatalogo(value, "marca", 80);
+          const errorNombre = validarNombreCatalogo(value, "marca", 50);
           if (errorNombre) return errorNombre;
           if (existeNombreCatalogo(marcas.value, value, item.id)) {
             return "Ya existe una marca registrada con ese nombre";
@@ -1399,6 +1403,8 @@ async function accionEditar(item) {
         html: `
         <input id="swal-cat-nombre" class="swal2-input" placeholder="Nombre" value="${item.nombre ?? ""}">
         <input id="swal-cat-precio" type="number" min="1" step="0.01" class="swal2-input" placeholder="Precio por día" value="${item.precio_dia ?? ""}">
+        <input id="swal-cat-min" type="number" min="1" max="15" step="1" class="swal2-input" placeholder="Mínimo de pasajeros" value="${item.capacidad_minima ?? ""}">
+        <input id="swal-cat-max" type="number" min="1" max="15" step="1" class="swal2-input" placeholder="Máximo de pasajeros" value="${item.capacidad_maxima ?? ""}">
       `,
         showCancelButton: true,
         confirmButtonText: "Guardar",
@@ -1409,7 +1415,7 @@ async function accionEditar(item) {
         preConfirm: () => {
           const nombre = normalizarTexto(document.getElementById("swal-cat-nombre")?.value);
           const precioRaw = document.getElementById("swal-cat-precio")?.value;
-          const errorNombre = validarNombreCatalogo(nombre, "categoria", 80);
+          const errorNombre = validarNombreCatalogo(nombre, "categoria", 50);
           const errorPrecio = validarPrecioDia(precioRaw);
           if (errorNombre) {
             Swal.showValidationMessage(errorNombre);
@@ -1423,7 +1429,24 @@ async function accionEditar(item) {
             Swal.showValidationMessage(errorPrecio);
             return false;
           }
-          return { nombre, precio_dia: Number(precioRaw) };
+          if (categorias.value.some((c) => c.id !== item.id && Number(c.precio_dia) === Number(precioRaw))) {
+            Swal.showValidationMessage("Ya existe una categoría con ese precio por día");
+            return false;
+          }
+          const minRaw = document.getElementById("swal-cat-min")?.value;
+          const maxRaw = document.getElementById("swal-cat-max")?.value;
+          const capacidad_minima = Number(minRaw);
+          const capacidad_maxima = Number(maxRaw);
+          const fueraDeRango = (raw, n) => !raw || !Number.isInteger(n) || n < 1 || n > 15;
+          if (fueraDeRango(minRaw, capacidad_minima) || fueraDeRango(maxRaw, capacidad_maxima)) {
+            Swal.showValidationMessage("El mínimo y el máximo de pasajeros deben ser números enteros entre 1 y 15");
+            return false;
+          }
+          if (capacidad_maxima < capacidad_minima) {
+            Swal.showValidationMessage("El máximo de pasajeros no puede ser menor que el mínimo");
+            return false;
+          }
+          return { nombre, precio_dia: Number(precioRaw), capacidad_minima, capacidad_maxima };
         },
       });
       if (!isConfirmed || !puedeGestionarCatalogos.value) return;
@@ -1445,7 +1468,6 @@ async function accionEditar(item) {
         html: `
         <input id="swal-mod-nombre" class="swal2-input" placeholder="Nombre" value="${item.nombre ?? ""}">
         <select id="swal-mod-marca" class="swal2-input">${marcasHtml}</select>
-        <input id="swal-mod-capacidad" type="number" min="1" max="15" step="1" class="swal2-input" placeholder="Máximo de pasajeros" value="${item.capacidad_maxima ?? ""}">
       `,
         showCancelButton: true,
         confirmButtonText: "Guardar",
@@ -1456,7 +1478,7 @@ async function accionEditar(item) {
         preConfirm: () => {
           const nombre = normalizarTexto(document.getElementById("swal-mod-nombre")?.value);
           const marca_id = Number(document.getElementById("swal-mod-marca")?.value);
-          const errorNombre = validarNombreCatalogo(nombre, "modelo", 100);
+          const errorNombre = validarNombreCatalogo(nombre, "modelo", 50);
           if (errorNombre) {
             Swal.showValidationMessage(errorNombre);
             return false;
@@ -1478,13 +1500,7 @@ async function accionEditar(item) {
             );
             return false;
           }
-          const capacidadRaw = document.getElementById("swal-mod-capacidad")?.value;
-          const capacidad_maxima = Number(capacidadRaw);
-          if (!capacidadRaw || !Number.isInteger(capacidad_maxima) || capacidad_maxima < 1 || capacidad_maxima > 15) {
-            Swal.showValidationMessage("Indica un número entero de pasajeros entre 1 y 15");
-            return false;
-          }
-          return { nombre, marca_id, capacidad_maxima };
+          return { nombre, marca_id };
         },
       });
       if (!isConfirmed || !puedeGestionarCatalogos.value) return;
