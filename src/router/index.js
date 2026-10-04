@@ -18,6 +18,19 @@ const router = createRouter({
       meta: { guest: true },
     },
     {
+      path: '/olvide-password',
+      name: 'olvide-password',
+      component: LoginView,
+      meta: { guest: true },
+    },
+    {
+      // el enlace del correo trae ?token=...&correo=...
+      path: '/restablecer-password',
+      name: 'restablecer-password',
+      component: LoginView,
+      meta: { guest: true },
+    },
+    {
       path: '/',
       component: () => import('../layouts/AppLayout.vue'),
       meta: { requiresAuth: true },

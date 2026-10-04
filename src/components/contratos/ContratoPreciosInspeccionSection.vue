@@ -18,10 +18,13 @@
             :value="descuento"
             type="number"
             min="0"
+            :max="subtotal"
             step="0.01"
             class="field-input mt-1 w-full field-input--plain"
+            :class="errorDescuento ? 'field-input--error' : ''"
             @input="$emit('update:descuento', Number($event.target.value) || 0)"
           />
+          <span v-if="errorDescuento" class="text-[11px] font-semibold mt-1 block" style="color:#c0392b;">{{ errorDescuento }}</span>
         </div>
       </div>
       <div class="mt-4 p-4 rounded-xl text-white flex justify-between items-center" style="background:linear-gradient(135deg,#922b21,#6b2118);">
@@ -78,10 +81,14 @@
       <textarea
         :value="observacionesEntrega"
         rows="4"
+        maxlength="500"
         class="field-input w-full resize-none field-input--plain"
         placeholder="Rayones, golpes, estado general..."
         @input="$emit('update:observacionesEntrega', $event.target.value)"
       ></textarea>
+      <p class="text-[11px] text-right mt-1" :class="isDark ? 'text-gray-500' : 'text-gray-400'">
+        {{ (observacionesEntrega || '').length }}/500
+      </p>
     </div>
   </section>
 </template>
@@ -89,7 +96,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useAppTheme } from '@/composables/useAppTheme'
-import { NIVELES_COMBUSTIBLE, formatPrecio, nivelCombustiblePct } from '@/utils/contratoFormatters'
+import { NIVELES_COMBUSTIBLE, formatPrecio, nivelCombustiblePct, errorDescuentoContrato } from '@/utils/contratoFormatters'
 
 const props = defineProps({
   dias:                 { type: Number, default: 0 },
@@ -105,6 +112,7 @@ const { isDark } = useAppTheme()
 const shellClass = computed(() => isDark.value ? 'form-section-dark bg-gray-900 border-gray-800' : 'form-section-light bg-white border-gray-100')
 const subtotal = computed(() => props.dias * props.precioDia)
 const total = computed(() => Math.max(0, subtotal.value - props.descuento))
+const errorDescuento = computed(() => errorDescuentoContrato(props.descuento, subtotal.value))
 const nivelPct = computed(() => nivelCombustiblePct(props.nivelCombustible))
 const nivelLabel = computed(() => NIVELES_COMBUSTIBLE.find((n) => n.value === props.nivelCombustible)?.label || props.nivelCombustible)
 const fuelLevelClass = computed(() => {
@@ -122,6 +130,7 @@ function seleccionarCombustible(value) {
 .field-label { display:block; font-size:0.7rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:0.5rem; }
 .field-input { padding:0.65rem 0.75rem; border-radius:0.75rem; font-size:0.875rem; outline:none; }
 .field-input--plain { padding-left:0.75rem; }
+.field-input--error { border-color:#c0392b !important; }
 .stat-box { padding:0.75rem; border-radius:0.75rem; border:1px solid; }
 .stat-box--light { border-color:#d9dee7; background:#f8fafc; }
 .stat-box--dark { border-color:#374151; background:#1f2937; }

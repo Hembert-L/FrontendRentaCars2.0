@@ -211,3 +211,12 @@ export function saldoPendienteContrato(contrato) {
   if (!contrato) return 0
   return centsToMoney(Math.max(0, moneyCents(totalFinalContrato(contrato)) - moneyCents(montoPagadoContrato(contrato))))
 }
+
+// mismas reglas que el back: no negativo, max 2 decimales y no mas que el subtotal
+export function errorDescuentoContrato(descuento, subtotal) {
+  const n = Number(descuento || 0)
+  if (!Number.isFinite(n) || n < 0) return 'El descuento no puede ser negativo.'
+  if (!/^\d+(\.\d{1,2})?$/.test(String(n))) return 'Usa máximo dos decimales.'
+  if (n > Number(subtotal || 0)) return `El descuento no puede ser mayor que el subtotal ($${formatPrecio(subtotal)}).`
+  return ''
+}

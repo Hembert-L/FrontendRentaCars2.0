@@ -149,7 +149,7 @@ import ContratoPdfPreview from '@/components/contratos/ContratoPdfPreview.vue'
 import { useContratosStore } from '@/stores/contratos'
 import { useReservasStore } from '@/stores/reservas'
 import { useAppTheme } from '@/composables/useAppTheme'
-import { calcularDias, documentosVigentes, reservaChocaConContratoDirecto } from '@/utils/contratoFormatters'
+import { calcularDias, documentosVigentes, reservaChocaConContratoDirecto, errorDescuentoContrato } from '@/utils/contratoFormatters'
 import { fechaHoyLocal, formatFecha } from '@/utils/reservaFormatters'
 import { pasaFechaMaxima, mensajeFechaMaxima } from '@/utils/rangoFechas'
 import { toastSuccess } from '@/utils/toast'
@@ -288,7 +288,8 @@ const paso2Ok = computed(() =>
   !mensajeDiaEntrega.value &&
   !mensajeFechaDevolucion.value,
 )
-const puedeGenerar = computed(() => paso1Ok.value && paso2Ok.value && dias.value > 0)
+const descuentoValido = computed(() => !errorDescuentoContrato(descuento.value, dias.value * precioDia.value))
+const puedeGenerar = computed(() => paso1Ok.value && paso2Ok.value && dias.value > 0 && descuentoValido.value)
 
 const pasoMaximo = computed(() => {
   if (paso2Ok.value) return 3

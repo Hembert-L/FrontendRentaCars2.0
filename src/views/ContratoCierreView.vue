@@ -46,17 +46,6 @@
               {{ contrato.observaciones_entrega || "Sin observaciones registradas en la entrega." }}
             </div>
           </div>
-          <div class="cierre-field">
-            <label>Estado y observaciones al recibir</label>
-            <textarea
-              v-model="observacionesRecepcion"
-              :disabled="operacionEnCurso"
-              rows="3"
-              maxlength="500"
-              class="cierre-input"
-              placeholder="Rayones, golpes, limpieza u otros detalles..."
-            ></textarea>
-          </div>
         </section>
 
         <div class="cierre-grid-2">
@@ -510,7 +499,6 @@ const cargosRegistrados = ref([]);
 const incidencias = ref([]);
 const incidenciasRegistradas = ref([]);
 const aplicarCargoRetraso = ref(true);
-const observacionesRecepcion = ref("");
 // misma tarifa que usa el back
 const TARIFA_RETRASO_HORA = 5;
 const cerrarConDeuda = ref(false);
@@ -1186,7 +1174,6 @@ async function cerrarRenta() {
       fecha_hora_recepcion: fechaHoraActualApi(),
       nivel_combustible_recepcion: nivelRecepcion.value,
       estado_vehiculo_recepcion: "RECIBIDO",
-      observaciones: observacionesRecepcion.value.trim() || null,
       aplicar_cargo_retraso: aplicaRetrasoAlCerrar.value,
     };
     if (conDeuda) {
