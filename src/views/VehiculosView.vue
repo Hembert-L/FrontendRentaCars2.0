@@ -96,6 +96,35 @@
         <option value="">Todos los estados</option>
         <option v-for="e in estadosFiltro" :key="e.value" :value="e.value">{{ e.label }}</option>
       </select>
+      <template v-if="activeTab === 'vehiculos'">
+        <select
+          v-model="filtroCategoria"
+          class="px-4 py-2.5 rounded-xl border text-sm font-medium min-w-[160px]"
+          :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-200' : 'border-gray-300 bg-white text-gray-700'"
+        >
+          <option value="">Todas las categorías</option>
+          <option v-for="c in store.categorias" :key="c.id" :value="String(c.id)">{{ c.nombre }}</option>
+        </select>
+        <select
+          v-model="filtroPropietario"
+          class="px-4 py-2.5 rounded-xl border text-sm font-medium min-w-[170px]"
+          :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-200' : 'border-gray-300 bg-white text-gray-700'"
+        >
+          <option value="">Todos los propietarios</option>
+          <option v-for="p in store.propietarios" :key="p.id" :value="String(p.id)">{{ p.nombre }}</option>
+        </select>
+      </template>
+      <select
+        v-if="activeTab === 'seguros'"
+        v-model="filtroVigencia"
+        class="px-4 py-2.5 rounded-xl border text-sm font-medium min-w-[170px]"
+        :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-200' : 'border-gray-300 bg-white text-gray-700'"
+      >
+        <option value="">Toda vigencia</option>
+        <option value="al_dia">Al día</option>
+        <option value="por_vencer">Vencen en 30 días</option>
+        <option value="vencido">Fecha vencida</option>
+      </select>
     </div>
 
     <div
@@ -160,12 +189,106 @@
         <span class="text-sm">{{ loadingLabel }}</span>
       </div>
 
-      <div v-else class="overflow-x-auto">
+      <div
+        v-if="!isLoadingTab && activeTab === 'seguros'"
+        class="md:hidden divide-y"
+        :class="isDark ? 'divide-gray-800' : 'divide-gray-200'"
+      >
+        <article v-for="item in itemsVisibles" :key="`seguro-card-${item.id}`" class="p-4 space-y-3">
+          <div class="flex items-start gap-3">
+            <div
+              class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+              style="background: #1d4ed8"
+            >
+              <i class="pi pi-shield text-white text-sm"></i>
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="font-semibold break-words" :class="isDark ? 'text-gray-100' : 'text-gray-800'">
+                {{ nombreSeguroVehiculo(item) }}
+              </p>
+              <p class="text-xs break-words" :class="isDark ? 'text-gray-400' : 'text-slate-500'">
+                {{ item.vehiculo?.placa || "Sin placa" }}
+                <template v-if="item.vehiculo?.propietario?.nombre">
+                  · {{ item.vehiculo.propietario.nombre }}
+                </template>
+              </p>
+            </div>
+            <span class="estado-badge flex-shrink-0" :class="estadoSeguroClase(item.estado)">
+              {{ item.estado || "Sin estado" }}
+            </span>
+          </div>
+          <dl class="grid grid-cols-2 gap-x-3 gap-y-2 text-xs" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+            <div>
+              <dt class="font-semibold" :class="isDark ? 'text-gray-500' : 'text-slate-500'">Aseguradora</dt>
+              <dd class="break-words">{{ item.aseguradora || "—" }}</dd>
+            </div>
+            <div>
+              <dt class="font-semibold" :class="isDark ? 'text-gray-500' : 'text-slate-500'">N.º de póliza</dt>
+              <dd class="break-words">{{ item.numero_poliza || "—" }}</dd>
+            </div>
+            <div>
+              <dt class="font-semibold" :class="isDark ? 'text-gray-500' : 'text-slate-500'">Inicio</dt>
+              <dd>{{ formatFechaSeguro(item.fecha_inicio) }}</dd>
+            </div>
+            <div>
+              <dt class="font-semibold" :class="isDark ? 'text-gray-500' : 'text-slate-500'">Vence</dt>
+              <dd :class="seguroFechaVencida(item) ? 'text-red-500 font-semibold' : ''">
+                {{ formatFechaSeguro(item.fecha_vencimiento) }}
+                <span v-if="seguroFechaVencida(item)"> (vencida)</span>
+              </dd>
+            </div>
+            <div class="col-span-2">
+              <dt class="font-semibold" :class="isDark ? 'text-gray-500' : 'text-slate-500'">Cobertura</dt>
+              <dd class="break-words">{{ item.cobertura || "Sin cobertura descrita" }}</dd>
+            </div>
+          </dl>
+          <div class="flex gap-2">
+            <button
+              type="button"
+              class="flex-1 py-2 rounded-lg border text-xs font-bold disabled:opacity-40"
+              :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-200' : 'border-gray-200 bg-gray-50 text-gray-700'"
+              :disabled="seguroGuardando"
+              @click="accionVerSeguro(item)"
+            >
+              <i class="pi pi-eye mr-1"></i> Ver
+            </button>
+            <button
+              v-if="puedeGestionarSeguros"
+              type="button"
+              class="flex-1 py-2 rounded-lg border text-xs font-bold disabled:opacity-40"
+              :class="isDark ? 'border-blue-800 bg-blue-950/40 text-blue-300' : 'border-blue-200 bg-blue-50 text-blue-700'"
+              :disabled="seguroGuardando"
+              @click="accionEditarSeguro(item)"
+            >
+              <i class="pi pi-pencil mr-1"></i> Editar
+            </button>
+            <button
+              v-if="puedeGestionarSeguros"
+              type="button"
+              class="flex-1 py-2 rounded-lg border text-xs font-bold disabled:opacity-40"
+              :class="isDark ? 'border-red-800 bg-red-950/40 text-red-300' : 'border-red-200 bg-red-50 text-red-700'"
+              :disabled="seguroGuardando"
+              @click="accionAnularSeguro(item)"
+            >
+              <i class="pi pi-ban mr-1"></i> Anular
+            </button>
+          </div>
+        </article>
+        <p
+          v-if="itemsFiltrados.length === 0"
+          class="px-5 py-12 text-center font-medium"
+          :class="isDark ? 'text-gray-400' : 'text-slate-500'"
+        >
+          {{ emptyLabel }}
+        </p>
+      </div>
+
+      <div v-if="!isLoadingTab" class="overflow-x-auto" :class="activeTab === 'seguros' ? 'hidden md:block' : ''">
         <table
           class="w-full text-sm table-fixed catalogo-table"
           :class="
             activeTab === 'vehiculos' || activeTab === 'seguros'
-              ? 'min-w-[1160px]'
+              ? 'min-w-[1000px]'
               : 'min-w-[860px]'
           "
         >
@@ -260,12 +383,22 @@
                       :class="isDark ? 'text-gray-400' : 'text-slate-500'"
                     >
                       {{ item.vehiculo?.placa || "Sin placa" }}
+                      <template v-if="item.vehiculo?.propietario?.nombre">
+                        · {{ item.vehiculo.propietario.nombre }}
+                      </template>
                     </p>
                   </div>
                 </div>
                 <div
+                  v-else-if="activeTab === 'seguros' && col.key === 'seguro_vigencia'"
+                  class="text-xs leading-5"
+                >
+                  <p><span class="font-semibold">Inicio:</span> {{ formatFechaSeguro(item.fecha_inicio) }}</p>
+                  <p><span class="font-semibold">Vence:</span> {{ formatFechaSeguro(item.fecha_vencimiento) }}</p>
+                </div>
+                <div
                   v-else-if="activeTab === 'seguros' && col.key === 'seguro_cobertura'"
-                  class="max-w-[220px] truncate"
+                  class="max-w-[180px] truncate"
                   :title="item.cobertura || 'Sin cobertura descrita'"
                 >
                   {{ item.cobertura || "Sin cobertura descrita" }}
@@ -301,6 +434,7 @@
                       "
                       :disabled="seguroGuardando"
                       title="Ver seguro"
+                      data-label="Ver"
                       @click="accionVerSeguro(item)"
                     >
                       <i class="pi pi-eye text-xs"></i>
@@ -316,6 +450,7 @@
                       "
                       :disabled="seguroGuardando"
                       title="Editar seguro"
+                      data-label="Editar"
                       @click="accionEditarSeguro(item)"
                     >
                       <i class="pi pi-pencil text-xs"></i>
@@ -331,6 +466,7 @@
                       "
                       :disabled="seguroGuardando"
                       title="Anular seguro"
+                      data-label="Anular"
                       @click="accionAnularSeguro(item)"
                     >
                       <i class="pi pi-ban text-xs"></i>
@@ -347,6 +483,7 @@
                         : 'border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100'
                     "
                     :title="`Editar ${tabActiva.label.slice(0, -1).toLowerCase()}`"
+                    data-label="Editar"
                   >
                     <i class="pi pi-pencil text-xs"></i>
                   </button>
@@ -354,20 +491,24 @@
                     v-if="
                       activeTab !== 'seguros' &&
                       puedeEscribirTab &&
-                      ['vehiculos', 'categorias', 'propietarios'].includes(activeTab) &&
+                      ['vehiculos', 'marcas', 'categorias', 'propietarios'].includes(activeTab) &&
                       !vehiculoFueraServicio(item)
                     "
                     type="button"
                     @click="accionEliminar(item)"
-                    class="w-8 h-8 rounded-lg inline-flex items-center justify-center border transition-all hover:shadow-sm"
+                    :data-label="activeTab === 'vehiculos' ? 'Fuera de servicio' : 'Eliminar'"
+                    class="w-8 h-8 rounded-lg inline-flex items-center justify-center border transition-all hover:shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
                     :class="
                       isDark
                         ? 'border-red-800 bg-red-950/40 text-red-300 hover:bg-red-950/70 hover:border-red-700'
                         : 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100'
                     "
+                    :disabled="vehiculoEnUso(item)"
                     :title="
                       activeTab === 'vehiculos'
-                        ? 'Enviar fuera de servicio'
+                        ? (vehiculoEnUso(item)
+                            ? 'No se puede enviar fuera de servicio mientras está ' + labelEstadoTabla(item.estado).toLowerCase()
+                            : 'Enviar fuera de servicio')
                         : `Eliminar ${tabActiva.label.slice(0, -1).toLowerCase()}`
                     "
                   >
@@ -384,6 +525,7 @@
                         : 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
                     "
                     title="Restaurar vehículo"
+                    data-label="Restaurar"
                   >
                     <i class="pi pi-refresh text-xs"></i>
                   </button>
@@ -533,6 +675,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import Swal from "sweetalert2";
 import api from "@/services/api";
 import VehiculosModal from "@/components/vehiculos/VehiculosModal.vue";
@@ -560,6 +703,11 @@ const seguroModalRef = ref(null);
 
 const search = ref("");
 const filtroEstado = ref("");
+const filtroCategoria = ref("");
+const filtroPropietario = ref("");
+const filtroVigencia = ref("");
+const route = useRoute();
+const router = useRouter();
 const activeTab = ref("vehiculos");
 const modalAbierto = ref(false);
 const catalogoAbierto = ref(false);
@@ -590,7 +738,8 @@ const ordenEstadosVehiculo = {
 };
 const nombreFlexibleRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 ./'-]+$/;
 const nombrePersonaRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ '-]+$/;
-const contieneLetraRegex = /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/;
+const nombreCategoriaRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ '-]*$/;
+const nombreMarcaRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ .'&-]*$/;
 const vehiculos = computed(() => store.vehiculos);
 const pagination = computed(() => store.pagination);
 const puedeRetroceder = computed(() => pagination.value.current_page > 1);
@@ -598,6 +747,7 @@ const puedeAvanzar = computed(() => pagination.value.current_page < pagination.v
 const marcas = computed(() => store.marcas);
 const categorias = computed(() => store.categorias);
 const propietarios = computed(() => store.propietarios);
+const vehiculosCompletos = computed(() => store.todosVehiculos);
 const seguros = computed(() => segurosStore.seguros);
 const proximoAVencer = computed(() => segurosStore.proximoAVencer);
 const puedeGestionarVehiculos = computed(() =>
@@ -660,9 +810,10 @@ const columnasPorTab = {
     { key: "modelos_count", label: "Modelos", width: "30%" },
   ],
   categorias: [
-    { key: "nombre", label: "Nombre", width: "35%" },
-    { key: "descripcion", label: "Tarifa", width: "35%" },
-    { key: "vehiculos_count", label: "Vehículos", width: "18%" },
+    { key: "nombre", label: "Nombre", width: "28%" },
+    { key: "descripcion", label: "Tarifa", width: "28%" },
+    { key: "rango_pasajeros", label: "Pasajeros", width: "16%" },
+    { key: "vehiculos_count", label: "Vehículos", width: "16%" },
   ],
   modelos: [
     { key: "modelo", label: "Modelo", width: "35%" },
@@ -676,13 +827,11 @@ const columnasPorTab = {
     { key: "vehiculos_count", label: "Vehículos", width: "18%" },
   ],
   seguros: [
-    { key: "seguro_vehiculo", label: "Vehículo", width: "220px" },
-    { key: "seguro_propietario", label: "Propietario", width: "180px" },
-    { key: "aseguradora", label: "Aseguradora", width: "170px" },
-    { key: "numero_poliza", label: "Número de póliza", width: "170px" },
-    { key: "fecha_inicio", label: "Inicio", width: "130px" },
-    { key: "fecha_vencimiento", label: "Vencimiento", width: "140px" },
-    { key: "seguro_cobertura", label: "Cobertura", width: "220px" },
+    { key: "seguro_vehiculo", label: "Vehículo / propietario", width: "240px" },
+    { key: "aseguradora", label: "Aseguradora", width: "160px" },
+    { key: "numero_poliza", label: "N.º de póliza", width: "150px" },
+    { key: "seguro_vigencia", label: "Vigencia", width: "170px" },
+    { key: "seguro_cobertura", label: "Cobertura", width: "190px" },
     { key: "seguro_estado", label: "Estado", width: "130px" },
   ],
 };
@@ -699,11 +848,17 @@ const subtitulos = {
 onMounted(() => {
   cargarVehiculos();
   store.fetchCatalogos();
+  store.fetchTodosVehiculos();
   cargarModelos();
   if (puedeVerSeguros.value) segurosStore.fetchSeguros().catch(() => {});
+  if (route.query.tab) cambiarTab(String(route.query.tab));
 });
 
-watch([search, filtroEstado], () => {
+watch(() => route.query.tab, (tab) => {
+  cambiarTab(tab ? String(tab) : "vehiculos");
+});
+
+watch([search, filtroEstado, filtroCategoria, filtroPropietario], () => {
   if (activeTab.value !== "vehiculos") return;
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => cargarVehiculos(1), 300);
@@ -754,6 +909,10 @@ const itemsFiltrados = computed(() => {
       filtroEstado.value &&
       item.estado !== filtroEstado.value
     ) {
+      return false;
+    }
+    if (activeTab.value === "vehiculos" && !coincideCatalogo(item)) return false;
+    if (activeTab.value === "seguros" && filtroVigencia.value && vigenciaSeguro(item) !== filtroVigencia.value) {
       return false;
     }
     if (!term) return true;
@@ -882,11 +1041,20 @@ const nuevoLabel = computed(() => {
 
 function cambiarTab(tab) {
   if (tab === "seguros" && !puedeVerSeguros.value) return;
+  if (!tabsVisibles.value.some((t) => t.value === tab)) return;
   if (activeTab.value === tab) return;
   activeTab.value = tab;
+  if (route.query.tab !== tab) {
+    router.replace({ query: { ...route.query, tab: tab === "vehiculos" ? undefined : tab } });
+  }
   search.value = "";
   catalogoPaginaActual.value = 1;
-  if (tab !== "vehiculos") filtroEstado.value = "";
+  if (tab !== "vehiculos") {
+    filtroEstado.value = "";
+    filtroCategoria.value = "";
+    filtroPropietario.value = "";
+  }
+  if (tab !== "seguros") filtroVigencia.value = "";
   if (tab === "vehiculos") cargarVehiculos(1);
   if (tab === "seguros" && !seguros.value.length && puedeVerSeguros.value)
     segurosStore.fetchSeguros().catch(() => {});
@@ -901,10 +1069,20 @@ function vehiculosParams(page = pagination.value.current_page || 1) {
 }
 
 async function cargarVehiculos(page = pagination.value.current_page || 1) {
+  if (filtroCategoria.value || filtroPropietario.value) {
+    await store.fetchVehiculosFiltrados(vehiculosParams(page), coincideCatalogo, page);
+    return;
+  }
   await store.fetchVehiculos(vehiculosParams(page));
   if (page > 1 && vehiculos.value.length === 0) {
     await store.fetchVehiculos(vehiculosParams(page - 1));
   }
+}
+
+function coincideCatalogo(item) {
+  if (filtroCategoria.value && String(item.categoria_id ?? item.categoria?.id) !== filtroCategoria.value) return false;
+  if (filtroPropietario.value && String(item.propietario_id ?? item.propietario?.id) !== filtroPropietario.value) return false;
+  return true;
 }
 
 async function cambiarPaginaVehiculos(page) {
@@ -951,11 +1129,14 @@ function validarNombreCatalogo(value, tipo, max = 80) {
   if (tipo === "propietario" && !nombrePersonaRegex.test(nombre)) {
     return "El nombre solo debe contener letras y signos básicos";
   }
-  if (tipo !== "propietario" && !nombreFlexibleRegex.test(nombre)) {
-    return "El nombre contiene caracteres no permitidos";
+  if (tipo === "categoria" && !nombreCategoriaRegex.test(nombre)) {
+    return "La categoría solo puede llevar letras y espacios";
   }
-  if (tipo === "categoria" && !contieneLetraRegex.test(nombre)) {
-    return "La categoría debe incluir al menos una letra";
+  if (tipo === "marca" && !nombreMarcaRegex.test(nombre)) {
+    return "La marca solo puede llevar letras, espacios, punto o guion";
+  }
+  if (tipo === "modelo" && !nombreFlexibleRegex.test(nombre)) {
+    return "El nombre contiene caracteres no permitidos";
   }
   return null;
 }
@@ -985,6 +1166,7 @@ function renderCelda(item, key) {
     nombre: item.nombre,
     modelo: item.nombre,
     marca_nombre: item.marca?.nombre,
+    rango_pasajeros: item.capacidad_minima && item.capacidad_maxima ? `${item.capacidad_minima} a ${item.capacidad_maxima}` : null,
     modelos_count: item.modelos_count ?? contarModelosPorMarca(item.id),
     vehiculos_count: item.vehiculos_count ?? contarVehiculosRelacionados(item),
     created_at: item.created_at ? formatFecha(item.created_at) : null,
@@ -1014,17 +1196,17 @@ function contarModelosPorMarca(marcaId) {
 function contarVehiculosRelacionados(item) {
   const id = item.id;
   if (activeTab.value === "categorias") {
-    return vehiculos.value.filter(
+    return vehiculosCompletos.value.filter(
       (vehiculo) => vehiculo.categoria_id == id || vehiculo.categoria?.id == id,
     ).length;
   }
   if (activeTab.value === "modelos") {
-    return vehiculos.value.filter(
+    return vehiculosCompletos.value.filter(
       (vehiculo) => vehiculo.modelo_id == id || vehiculo.modelo?.id == id,
     ).length;
   }
   if (activeTab.value === "propietarios") {
-    return vehiculos.value.filter(
+    return vehiculosCompletos.value.filter(
       (vehiculo) => vehiculo.propietario_id == id || vehiculo.propietario?.id == id,
     ).length;
   }
@@ -1049,6 +1231,11 @@ function labelEstadoTabla(estado) {
 
 function vehiculoFueraServicio(item) {
   return activeTab.value === "vehiculos" && item?.estado === "FUERA DE SERVICIO";
+}
+
+const ESTADOS_VEHICULO_EN_USO = ["RENTADO"];
+function vehiculoEnUso(item) {
+  return activeTab.value === "vehiculos" && ESTADOS_VEHICULO_EN_USO.includes(item?.estado);
 }
 
 function nombreSeguroVehiculo(seguro) {
@@ -1081,6 +1268,19 @@ function seguroFechaVencida(seguro) {
   const actual = hoy.getFullYear() * 10000 + (hoy.getMonth() + 1) * 100 + hoy.getDate();
   const vencimiento = fechaSeguroCalendario(seguro.fecha_vencimiento);
   return vencimiento != null && vencimiento < actual;
+}
+
+// el back solo manda los vigentes, esto separa los que ya pasaron o estan por pasar la fecha
+function vigenciaSeguro(seguro) {
+  const vencimiento = fechaSeguroCalendario(seguro?.fecha_vencimiento);
+  if (vencimiento == null) return "al_dia";
+  const hoy = new Date();
+  const actual = hoy.getFullYear() * 10000 + (hoy.getMonth() + 1) * 100 + hoy.getDate();
+  const limite = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 30);
+  const enTreinta = limite.getFullYear() * 10000 + (limite.getMonth() + 1) * 100 + limite.getDate();
+  if (vencimiento < actual) return "vencido";
+  if (vencimiento <= enTreinta) return "por_vencer";
+  return "al_dia";
 }
 
 function estadoSeguroClase(estado) {
@@ -1184,7 +1384,7 @@ async function accionEditar(item) {
         background: isDark.value ? "#1f2937" : "#fff",
         color: isDark.value ? "#f3f4f6" : "#111827",
         inputValidator: (value) => {
-          const errorNombre = validarNombreCatalogo(value, "marca", 80);
+          const errorNombre = validarNombreCatalogo(value, "marca", 50);
           if (errorNombre) return errorNombre;
           if (existeNombreCatalogo(marcas.value, value, item.id)) {
             return "Ya existe una marca registrada con ese nombre";
@@ -1193,7 +1393,7 @@ async function accionEditar(item) {
         },
       });
       if (!result.isConfirmed || !puedeGestionarCatalogos.value) return;
-      await api.put(`/marcas/${item.id}`, { nombre: normalizarTexto(result.value) });
+      await api.put(`/admin/marcas/${item.id}`, { nombre: normalizarTexto(result.value) });
       await store.fetchCatalogos(true);
       return;
     }
@@ -1203,6 +1403,8 @@ async function accionEditar(item) {
         html: `
         <input id="swal-cat-nombre" class="swal2-input" placeholder="Nombre" value="${item.nombre ?? ""}">
         <input id="swal-cat-precio" type="number" min="1" step="0.01" class="swal2-input" placeholder="Precio por día" value="${item.precio_dia ?? ""}">
+        <input id="swal-cat-min" type="number" min="1" max="15" step="1" class="swal2-input" placeholder="Mínimo de pasajeros" value="${item.capacidad_minima ?? ""}">
+        <input id="swal-cat-max" type="number" min="1" max="15" step="1" class="swal2-input" placeholder="Máximo de pasajeros" value="${item.capacidad_maxima ?? ""}">
       `,
         showCancelButton: true,
         confirmButtonText: "Guardar",
@@ -1213,7 +1415,7 @@ async function accionEditar(item) {
         preConfirm: () => {
           const nombre = normalizarTexto(document.getElementById("swal-cat-nombre")?.value);
           const precioRaw = document.getElementById("swal-cat-precio")?.value;
-          const errorNombre = validarNombreCatalogo(nombre, "categoria", 80);
+          const errorNombre = validarNombreCatalogo(nombre, "categoria", 50);
           const errorPrecio = validarPrecioDia(precioRaw);
           if (errorNombre) {
             Swal.showValidationMessage(errorNombre);
@@ -1227,11 +1429,28 @@ async function accionEditar(item) {
             Swal.showValidationMessage(errorPrecio);
             return false;
           }
-          return { nombre, precio_dia: Number(precioRaw) };
+          if (categorias.value.some((c) => c.id !== item.id && Number(c.precio_dia) === Number(precioRaw))) {
+            Swal.showValidationMessage("Ya existe una categoría con ese precio por día");
+            return false;
+          }
+          const minRaw = document.getElementById("swal-cat-min")?.value;
+          const maxRaw = document.getElementById("swal-cat-max")?.value;
+          const capacidad_minima = Number(minRaw);
+          const capacidad_maxima = Number(maxRaw);
+          const fueraDeRango = (raw, n) => !raw || !Number.isInteger(n) || n < 1 || n > 15;
+          if (fueraDeRango(minRaw, capacidad_minima) || fueraDeRango(maxRaw, capacidad_maxima)) {
+            Swal.showValidationMessage("El mínimo y el máximo de pasajeros deben ser números enteros entre 1 y 15");
+            return false;
+          }
+          if (capacidad_maxima < capacidad_minima) {
+            Swal.showValidationMessage("El máximo de pasajeros no puede ser menor que el mínimo");
+            return false;
+          }
+          return { nombre, precio_dia: Number(precioRaw), capacidad_minima, capacidad_maxima };
         },
       });
       if (!isConfirmed || !puedeGestionarCatalogos.value) return;
-      await api.put(`/categorias/${item.id}`, value);
+      await api.put(`/admin/categorias/${item.id}`, value);
       await store.fetchCatalogos(true);
       return;
     }
@@ -1259,7 +1478,7 @@ async function accionEditar(item) {
         preConfirm: () => {
           const nombre = normalizarTexto(document.getElementById("swal-mod-nombre")?.value);
           const marca_id = Number(document.getElementById("swal-mod-marca")?.value);
-          const errorNombre = validarNombreCatalogo(nombre, "modelo", 100);
+          const errorNombre = validarNombreCatalogo(nombre, "modelo", 50);
           if (errorNombre) {
             Swal.showValidationMessage(errorNombre);
             return false;
@@ -1285,7 +1504,7 @@ async function accionEditar(item) {
         },
       });
       if (!isConfirmed || !puedeGestionarCatalogos.value) return;
-      await api.put(`/modelos/${item.id}`, value);
+      await api.put(`/admin/modelos/${item.id}`, value);
       await cargarModelos();
       return;
     }
@@ -1353,7 +1572,18 @@ async function accionRestaurar(item) {
   }
 }
 async function accionEliminar(item) {
-  if (!puedeEscribirTab.value || !["vehiculos", "categorias", "propietarios"].includes(activeTab.value)) return;
+  if (!puedeEscribirTab.value || !["vehiculos", "marcas", "categorias", "propietarios"].includes(activeTab.value)) return;
+  if (activeTab.value === "vehiculos" && vehiculoEnUso(item)) {
+    await Swal.fire({
+      icon: "info",
+      title: "No se puede enviar fuera de servicio",
+      text: `${nombreVehiculo(item)} está ${labelEstadoTabla(item.estado).toLowerCase()}. Espera a que finalice esa operación antes de darlo de baja.`,
+      confirmButtonColor: "#c0392b",
+      background: isDark.value ? "#1f2937" : "#fff",
+      color: isDark.value ? "#f3f4f6" : "#111827",
+    });
+    return;
+  }
   const tab = activeTab.value;
   const nombre = activeTab.value === "vehiculos" ? nombreVehiculo(item) : item.nombre;
   const esVehiculo = activeTab.value === "vehiculos";
@@ -1378,8 +1608,8 @@ async function accionEliminar(item) {
   try {
     const endpoints = {
       vehiculos: `/admin/vehiculos/${item.id}`,
-      marcas: `/marcas/${item.id}`,
-      categorias: `/categorias/${item.id}`,
+      marcas: `/admin/marcas/${item.id}`,
+      categorias: `/admin/categorias/${item.id}`,
       propietarios: `/admin/propietarios/${item.id}`,
     };
     await api.delete(endpoints[activeTab.value]);
@@ -1578,8 +1808,8 @@ async function mostrarErrorSeguro(e, fallback) {
 async function cargarModelos() {
   cargandoModelos.value = true;
   try {
-    const res = await api.get("/modelos");
-    modelos.value = extraerLista(res.data?.data);
+    const { items } = await fetchAllPaginated((params) => api.get("/admin/modelos", { params }));
+    modelos.value = items;
   } catch {
     modelos.value = [];
   } finally {
@@ -1599,6 +1829,7 @@ async function guardarVehiculo(form) {
       await cargarVehiculos(1);
       toastSuccess("Vehículo registrado");
     }
+    store.fetchTodosVehiculos(true);
     modalAbierto.value = false;
   } catch (e) {
     if (vehiculoModalRef.value?.aplicarErroresBackend?.(e)) return;

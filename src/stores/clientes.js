@@ -74,6 +74,37 @@ export const useClientesStore = defineStore('clientes', () => {
     }
   }
 
+  // filtro de licencia: el back no lo tiene, se traen todos y se pagina aqui
+  async function fetchClientesFiltrados(params = {}, filtrar, page = 1, perPage = 10) {
+    loading.value = true
+    error.value   = null
+    try {
+      const filtros = { ...params }
+      delete filtros.page
+      const { items } = await fetchAllPaginated((p) => api.get('/admin/clientes', { params: p }), filtros)
+      const visibles = items.map(normalizeCliente).filter(filtrar)
+      const total = visibles.length
+      const lastPage = Math.max(1, Math.ceil(total / perPage))
+      const actual = Math.min(Math.max(1, Number(page) || 1), lastPage)
+      const inicio = (actual - 1) * perPage
+      clientes.value = visibles.slice(inicio, inicio + perPage)
+      pagination.value = {
+        current_page: actual,
+        last_page: lastPage,
+        per_page: perPage,
+        total,
+        from: total ? inicio + 1 : 0,
+        to: inicio + clientes.value.length,
+      }
+    } catch (e) {
+      error.value = e.response?.data?.message || 'Error al cargar clientes.'
+      clientes.value = []
+      pagination.value = normalizePagination(null)
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function fetchDepartamentos() {
     if (departamentos.value.length) return departamentos.value
 
@@ -188,6 +219,7 @@ export const useClientesStore = defineStore('clientes', () => {
     pagination,
     total,
     fetchClientes,
+    fetchClientesFiltrados,
     fetchDepartamentos,
     fetchMunicipios,
     buscarClientes,

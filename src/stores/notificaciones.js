@@ -1,21 +1,32 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import api from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
 
-const LEIDAS_KEY = 'rentacar_notificaciones_leidas'
+// las leidas se guardan en el navegador, una lista por usuario
+const LEIDAS_PREFIJO = 'rentacar_notificaciones_leidas'
 let notificacionesDisponibles = true
 
-function cargarLeidas() {
+function claveLeidas(usuarioId) {
+  return `${LEIDAS_PREFIJO}_${usuarioId ?? 'anonimo'}`
+}
+
+function cargarLeidas(usuarioId) {
   try {
-    const raw = localStorage.getItem(LEIDAS_KEY)
-    return raw ? JSON.parse(raw) : []
+    const raw = localStorage.getItem(claveLeidas(usuarioId))
+    const ids = raw ? JSON.parse(raw) : []
+    return Array.isArray(ids) ? ids : []
   } catch {
     return []
   }
 }
 
-function guardarLeidas(ids) {
-  localStorage.setItem(LEIDAS_KEY, JSON.stringify(ids))
+function guardarLeidas(usuarioId, ids) {
+  try {
+    localStorage.setItem(claveLeidas(usuarioId), JSON.stringify(ids))
+  } catch {
+    // si no hay localStorage no pasa nada
+  }
 }
 
 function normalizarTipo(tipo) {
@@ -73,7 +84,19 @@ export const useNotificacionesStore = defineStore('notificaciones', () => {
   const items = ref([])
   const loading = ref(false)
   const error = ref(null)
-  const leidas = ref(cargarLeidas())
+  const authStore = useAuthStore()
+  let usuarioLeidas = authStore.user?.id
+  const leidas = ref(cargarLeidas(usuarioLeidas))
+
+  // por si otro usuario inicia sesion en la misma pestaña
+  function sincronizarUsuario() {
+    const actual = authStore.user?.id
+    if (actual === usuarioLeidas) return
+    usuarioLeidas = actual
+    leidas.value = cargarLeidas(actual)
+    conocidas.value = new Set()
+    primeraCarga.value = true
+  }
   const flyingQueue = ref([])
   const conocidas = ref(new Set())
   const primeraCarga = ref(true)
@@ -98,13 +121,13 @@ export const useNotificacionesStore = defineStore('notificaciones', () => {
   function marcarLeida(id) {
     if (!leidas.value.includes(id)) {
       leidas.value = [...leidas.value, id]
-      guardarLeidas(leidas.value)
+      guardarLeidas(usuarioLeidas, leidas.value)
     }
   }
 
   function marcarTodasLeidas() {
     leidas.value = items.value.map((n) => n.id)
-    guardarLeidas(leidas.value)
+    guardarLeidas(usuarioLeidas, leidas.value)
   }
 
   function encolarAnimacion(nuevas) {
@@ -121,6 +144,7 @@ export const useNotificacionesStore = defineStore('notificaciones', () => {
 
   async function fetchNotificaciones(silencioso = false) {
     if (!notificacionesDisponibles) return
+    sincronizarUsuario()
     if (!silencioso) loading.value = true
     error.value = null
     try {
@@ -136,6 +160,14 @@ export const useNotificacionesStore = defineStore('notificaciones', () => {
 
       lista.forEach((n) => conocidas.value.add(n.id))
       items.value = lista
+
+      // quitar las que ya no vienen del back
+      const vigentes = new Set(lista.map((n) => n.id))
+      const depuradas = leidas.value.filter((id) => vigentes.has(id))
+      if (depuradas.length !== leidas.value.length) {
+        leidas.value = depuradas
+        guardarLeidas(usuarioLeidas, depuradas)
+      }
 
       if (primeraCarga.value) {
         primeraCarga.value = false

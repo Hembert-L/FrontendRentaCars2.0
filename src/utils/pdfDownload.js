@@ -4,37 +4,78 @@ import api from '@/services/api'
  * Descarga un PDF autenticado desde la API y lo abre en una nueva pestaña.
  */
 export async function abrirPdf(url, params = {}) {
-  const res = await api.get(url, {
-    params,
-    responseType: 'blob',
-    headers: { Accept: 'application/pdf' },
-  })
+  const ventana = window.open('', '_blank')
+  mostrarCargandoEnVentana(ventana)
+
+  try {
+    const { blob, filename } = await pedirPdf(url, params)
+
+    if (!ventana || ventana.closed) {
+      descargarBlob(blob, filename)
+      return { modo: 'descarga', filename }
+    }
+
+    const blobUrl = URL.createObjectURL(blob)
+    ventana.location.href = blobUrl
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000)
+    return { modo: 'pestana', filename }
+  } catch (e) {
+    ventana?.close()
+    throw e
+  }
+}
+
+export async function descargarPdf(url, params = {}, nombrePorDefecto = 'documento.pdf') {
+  const { blob, filename } = await pedirPdf(url, params, nombrePorDefecto)
+  descargarBlob(blob, filename)
+  return { modo: 'descarga', filename }
+}
+
+async function pedirPdf(url, params = {}, nombrePorDefecto = 'documento.pdf') {
+  let res
+  try {
+    res = await api.get(url, {
+      params,
+      responseType: 'blob',
+      headers: { Accept: 'application/pdf' },
+    })
+  } catch (e) {
+    throw await errorConMensajeDelServidor(e)
+  }
 
   await validarRespuestaPdf(res)
 
-  const blob = new Blob([res.data], { type: 'application/pdf' })
-  const blobUrl = URL.createObjectURL(blob)
-  const ventana = window.open(blobUrl, '_blank')
-
-  if (!ventana) {
-    descargarBlob(blob, extraerNombre(res) || 'documento.pdf')
-    URL.revokeObjectURL(blobUrl)
-    return null
+  return {
+    blob: new Blob([res.data], { type: 'application/pdf' }),
+    filename: extraerNombre(res) || nombrePorDefecto,
   }
+}
 
-  setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000)
-  return blobUrl
+function mostrarCargandoEnVentana(ventana) {
+  try {
+    if (!ventana?.document) return
+    ventana.document.title = 'Generando PDF...'
+    ventana.document.body.innerHTML =
+      '<p style="font-family:system-ui,sans-serif;color:#4b5563;text-align:center;margin-top:20vh">Generando PDF, espera un momento...</p>'
+  } catch {
+    return
+  }
 }
 
 /**
  * Obtiene un PDF como blob URL (útil para iframes en modales).
  */
 export async function obtenerPdfBlobUrl(url, params = {}) {
-  const res = await api.get(url, {
-    params,
-    responseType: 'blob',
-    headers: { Accept: 'application/pdf' },
-  })
+  let res
+  try {
+    res = await api.get(url, {
+      params,
+      responseType: 'blob',
+      headers: { Accept: 'application/pdf' },
+    })
+  } catch (e) {
+    throw await errorConMensajeDelServidor(e)
+  }
 
   await validarRespuestaPdf(res)
 
@@ -55,14 +96,30 @@ export function descargarBlob(blob, filename) {
   const a = document.createElement('a')
   a.href = url
   a.download = filename
+  a.style.display = 'none'
+  document.body.appendChild(a)
   a.click()
-  URL.revokeObjectURL(url)
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 10_000)
 }
 
 function extraerNombre(response) {
   const disposition = response.headers['content-disposition'] || ''
   const match = disposition.match(/filename[^;=\n]*=(['"]?)([^'"\n]*)\1/)
   return match?.[2] ? decodeURIComponent(match[2]) : null
+}
+
+async function errorConMensajeDelServidor(error) {
+  const data = error.response?.data
+  if (!(data instanceof Blob)) return error
+  try {
+    const json = JSON.parse(await data.text())
+    error.response.data = json
+    if (json?.message) error.message = json.message
+  } catch {
+    return error
+  }
+  return error
 }
 
 async function validarRespuestaPdf(response) {

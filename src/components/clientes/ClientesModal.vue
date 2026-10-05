@@ -5,7 +5,6 @@
         v-if="visible"
         class="fixed inset-0 z-[80] flex items-center justify-center p-4"
         style="background:rgba(0,0,0,0.45);"
-        @click.self.stop="$emit('cerrar')"
       >
         <div
           class="rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden"
@@ -45,7 +44,7 @@
               <label class="field-label">Nombre completo</label>
               <div class="relative">
                 <i class="pi pi-user input-icon"></i>
-                <input v-model.trim="form.nombre" type="text" class="field-input" :class="errors.nombre ? 'error' : ''" autocomplete="name" @blur="normalizarNombreEnFormulario" />
+                <input v-model.trim="form.nombre" type="text" maxlength="100" class="field-input" :class="errors.nombre ? 'error' : ''" autocomplete="name" @blur="normalizarNombreEnFormulario" />
               </div>
               <p v-if="errors.nombre" class="field-error">{{ errors.nombre }}</p>
             </div>

@@ -16,10 +16,10 @@
     </div>
 
     <div
-      class="rounded-2xl border shadow-sm p-4 mb-5 flex flex-col sm:flex-row gap-3"
+      class="rounded-2xl border shadow-sm p-4 mb-5 flex flex-col sm:flex-row sm:flex-wrap gap-3"
       :class="isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'"
     >
-      <div class="relative flex-1">
+      <div class="relative flex-1 min-w-[220px]">
         <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-sm pointer-events-none" :class="isDark ? 'text-gray-500' : 'text-gray-400'"></i>
         <input
           v-model="buscar"
@@ -36,8 +36,6 @@
       >
         <option value="">Todos los estados</option>
         <option value="ACTIVO">Activo</option>
-        <option value="PENDIENTE">Pendiente</option>
-        <option value="VENCIDO">Vencido</option>
         <option value="FINALIZADO">Finalizado</option>
         <option value="ANULADO">Anulado</option>
       </select>
@@ -51,6 +49,42 @@
         <option value="PARCIAL">Pago parcial</option>
         <option value="PAGADO">Pagado</option>
       </select>
+      <select
+        v-model="filtroDevolucion"
+        class="px-4 py-2.5 rounded-xl border text-sm focus:outline-none min-w-[180px]"
+        :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-100' : 'border-gray-200 bg-gray-50'"
+      >
+        <option value="">Cualquier devolución</option>
+        <option value="hoy">Devuelven hoy</option>
+        <option value="atrasados">Atrasados</option>
+        <option value="semana">Próximos 7 días</option>
+      </select>
+      <div class="flex items-center gap-2">
+        <label class="text-xs font-semibold whitespace-nowrap" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Entrega desde</label>
+        <input
+          v-model="filtroDesde"
+          type="date"
+          class="px-3 py-2.5 rounded-xl border text-sm focus:outline-none"
+          :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-100' : 'border-gray-200 bg-gray-50'"
+        />
+        <label class="text-xs font-semibold" :class="isDark ? 'text-gray-400' : 'text-gray-500'">hasta</label>
+        <input
+          v-model="filtroHasta"
+          type="date"
+          :min="filtroDesde || undefined"
+          class="px-3 py-2.5 rounded-xl border text-sm focus:outline-none"
+          :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-100' : 'border-gray-200 bg-gray-50'"
+        />
+      </div>
+      <button
+        v-if="hayFiltros"
+        type="button"
+        class="text-xs font-bold underline self-center"
+        style="color:#c0392b;"
+        @click="limpiarFiltros"
+      >
+        Limpiar filtros
+      </button>
     </div>
 
     <div
@@ -99,7 +133,7 @@
               <td class="px-5 py-4 tabular-nums" :class="isDark ? 'text-gray-200' : 'text-gray-800'">
                 <p class="font-bold">${{ formatPrecio(totalFinalContrato(c)) }}</p>
                 <p v-if="montoExtrasContrato(c) > 0" class="text-xs font-semibold mt-0.5" style="color:#d97706;">
-                  +${{ formatPrecio(montoExtrasContrato(c)) }} extras
+                  Incluye ${{ formatPrecio(montoExtrasContrato(c)) }} extras
                 </p>
                 <p v-if="montoPagadoContrato(c) > 0" class="text-xs mt-0.5" :class="isDark ? 'text-gray-500' : 'text-gray-400'">
                   Pagado: ${{ formatPrecio(montoPagadoContrato(c)) }}
@@ -118,20 +152,11 @@
                     class="w-8 h-8 rounded-lg flex items-center justify-center border transition-all hover:shadow-sm shrink-0"
                     :class="isDark ? 'border-red-800 bg-red-950/40 text-[#c0392b] hover:bg-red-950/70' : 'border-red-200 bg-red-50 text-[#c0392b] hover:bg-red-100'"
                     title="Ver contrato"
+                    data-label="Ver contrato"
                     :disabled="cargandoPdf === c.id"
                     @click="verContrato(c)"
                   >
                     <i :class="cargandoPdf === c.id ? 'pi pi-spin pi-spinner' : 'pi pi-eye'" class="text-sm leading-none"></i>
-                  </button>
-                  <button
-                    v-if="c.estado_pago !== 'PAGADO' && c.estado_contrato !== 'ANULADO'"
-                    type="button"
-                    class="w-8 h-8 rounded-lg flex items-center justify-center border transition-all hover:shadow-sm shrink-0"
-                    :class="isDark ? 'border-red-800 bg-red-950/40 text-[#f0a500] hover:bg-red-950/70' : 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100'"
-                    title="Registrar pago"
-                    @click="router.push({ name: 'pagos', query: { contrato_id: c.id, cobrar: '1' } })"
-                  >
-                    <i class="pi pi-dollar text-xs"></i>
                   </button>
                   <router-link
                     v-if="c.estado_contrato === 'ACTIVO'"
@@ -143,6 +168,28 @@
                     <i class="pi pi-flag text-[10px]"></i>
                     Cerrar
                   </router-link>
+                  <button
+                    v-else-if="puedeRegistrarPago(c)"
+                    type="button"
+                    class="w-8 h-8 rounded-lg flex items-center justify-center border transition-all hover:shadow-sm shrink-0"
+                    :class="isDark ? 'border-red-800 bg-red-950/40 text-[#f0a500] hover:bg-red-950/70' : 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100'"
+                    title="Registrar pago"
+                    data-label="Registrar pago"
+                    @click="irAPagos(c)"
+                  >
+                    <i class="pi pi-dollar text-xs"></i>
+                  </button>
+                  <button
+                    v-if="accionesExtra(c).length"
+                    type="button"
+                    class="mas-btn"
+                    :class="[isDark ? 'mas-btn--dark' : 'mas-btn--light', { 'mas-btn--abierto': menuAcciones?.contrato.id === c.id }]"
+                    title="Más opciones"
+                    @click.stop="abrirMenuAcciones(c, $event)"
+                  >
+                    Más
+                    <i class="pi pi-chevron-down text-[9px]"></i>
+                  </button>
                 </div>
               </td>
             </tr>
@@ -193,17 +240,51 @@
       </div>
     </div>
 
+    <Teleport to="body">
+      <div
+        v-if="menuAcciones"
+        class="menu-acciones"
+        :class="isDark ? 'menu-acciones--dark' : 'menu-acciones--light'"
+        :style="{ top: `${menuAcciones.top}px`, left: `${menuAcciones.left}px` }"
+        @click.stop
+      >
+        <button
+          v-for="accion in accionesExtra(menuAcciones.contrato)"
+          :key="accion.id"
+          type="button"
+          class="menu-acciones__item"
+          :class="accion.peligro ? 'menu-acciones__item--peligro' : ''"
+          @click="ejecutarAccion(accion)"
+        >
+          <i :class="['pi', accion.icono]"></i>
+          {{ accion.texto }}
+        </button>
+      </div>
+    </Teleport>
+
     <ContratoPdfPreview :visible="modalPdf" :contrato="contratoVer" @cerrar="cerrarPdf" />
+    <ContratoCambiarVehiculoModal
+      :visible="Boolean(contratoCambio)"
+      :contrato="contratoCambio"
+      :guardando="cambiandoVehiculo"
+      :errores-servidor="erroresCambio"
+      :error-servidor="errorCambio"
+      @cerrar="contratoCambio = null"
+      @confirmar="confirmarCambioVehiculo"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Swal from 'sweetalert2'
 import ContratoPdfPreview from '@/components/contratos/ContratoPdfPreview.vue'
+import ContratoCambiarVehiculoModal from '@/components/contratos/ContratoCambiarVehiculoModal.vue'
 import { useContratosStore } from '@/stores/contratos'
+import { useAuthStore } from '@/stores/auth'
 import { useAppTheme } from '@/composables/useAppTheme'
+import { toastSuccess } from '@/utils/toast'
 import {
   nombreVehiculo,
   formatPrecio,
@@ -213,16 +294,30 @@ import {
   totalFinalContrato,
   montoExtrasContrato,
   montoPagadoContrato,
+  fechaLocalISO,
 } from '@/utils/contratoFormatters'
+import { fechaHoyLocal, sumarDiasISO } from '@/utils/reservaFormatters'
 
 const { isDark } = useAppTheme()
 const route = useRoute()
 const router = useRouter()
 const store = useContratosStore()
+const authStore = useAuthStore()
 
 const buscar = ref('')
+const anulando = ref(null)
+const contratoCambio = ref(null)
+const cambiandoVehiculo = ref(false)
+const erroresCambio = ref({})
+const errorCambio = ref('')
 const filtroEstado = ref('')
 const filtroPago = ref('')
+const filtroDevolucion = ref('')
+const filtroDesde = ref('')
+const filtroHasta = ref('')
+const hayFiltros = computed(() =>
+  Boolean(buscar.value || filtroEstado.value || filtroPago.value || filtroDevolucion.value || filtroDesde.value || filtroHasta.value),
+)
 const modalPdf = ref(false)
 const contratoVer = ref(null)
 const cargandoPdf = ref(null)
@@ -231,10 +326,8 @@ const contratosPorPagina = 10
 
 const ordenEstadoContrato = {
   ACTIVO: 1,
-  VENCIDO: 2,
-  PENDIENTE: 3,
-  FINALIZADO: 4,
-  ANULADO: 5,
+  FINALIZADO: 2,
+  ANULADO: 3,
 }
 
 const ordenPagoContrato = {
@@ -259,8 +352,31 @@ const contratosFiltrados = computed(() => {
   }
   if (filtroEstado.value) list = list.filter((c) => c.estado_contrato === filtroEstado.value)
   if (filtroPago.value) list = list.filter((c) => c.estado_pago === filtroPago.value)
+  if (filtroDevolucion.value) list = list.filter(coincideDevolucion)
+  if (filtroDesde.value) list = list.filter((c) => fechaLocalISO(c.fecha_hora_entrega) >= filtroDesde.value)
+  if (filtroHasta.value) list = list.filter((c) => fechaLocalISO(c.fecha_hora_entrega) <= filtroHasta.value)
   return ordenarContratos(list)
 })
+
+// solo cuenta para contratos activos, que son los que faltan por devolver
+function coincideDevolucion(c) {
+  if (c.estado_contrato !== 'ACTIVO') return false
+  const hoy = fechaHoyLocal()
+  const devolucion = fechaLocalISO(c.fecha_hora_devolucion)
+  if (filtroDevolucion.value === 'hoy') return devolucion === hoy
+  if (filtroDevolucion.value === 'atrasados') return new Date(c.fecha_hora_devolucion).getTime() < Date.now()
+  if (filtroDevolucion.value === 'semana') return devolucion >= hoy && devolucion <= sumarDiasISO(hoy, 7)
+  return true
+}
+
+function limpiarFiltros() {
+  buscar.value = ''
+  filtroEstado.value = ''
+  filtroPago.value = ''
+  filtroDevolucion.value = ''
+  filtroDesde.value = ''
+  filtroHasta.value = ''
+}
 
 const pagination = computed(() => {
   const total = contratosFiltrados.value.length
@@ -291,7 +407,7 @@ onMounted(async () => {
   await abrirContratoDesdeQuery()
 })
 
-watch([buscar, filtroEstado, filtroPago], () => {
+watch([buscar, filtroEstado, filtroPago, filtroDevolucion, filtroDesde, filtroHasta], () => {
   paginaActual.value = 1
 })
 
@@ -305,11 +421,21 @@ function cambiarPagina(page) {
 }
 
 function clienteContrato(contrato) {
-  return contrato?.cliente || contrato?.reserva?.cliente || null
+  const embebido = contrato?.cliente || contrato?.reserva?.cliente || null
+  if (embebido) return embebido
+  const snap = contrato?.info_registro?.cliente
+  return snap ? { nombre: snap.nombre, dui: snap.dui } : null
 }
 
 function vehiculoContrato(contrato) {
-  return contrato?.vehiculo || contrato?.reserva?.vehiculo || null
+  const embebido = contrato?.vehiculo || contrato?.reserva?.vehiculo || null
+  if (embebido) return embebido
+  const snap = contrato?.info_registro?.vehiculo
+  if (!snap) return null
+  return {
+    placa: snap.placa,
+    modelo: { nombre: snap.modelo, marca: { nombre: snap.marca } },
+  }
 }
 
 function fechaOrden(contrato) {
@@ -326,7 +452,7 @@ function ordenarContratos(lista) {
     const estadoB = ordenEstadoContrato[b.estado_contrato] ?? 99
     if (estadoA !== estadoB) return estadoA - estadoB
 
-    if (a.estado_contrato === 'ACTIVO' || a.estado_contrato === 'VENCIDO') {
+    if (a.estado_contrato === 'ACTIVO') {
       const pagoA = ordenPagoContrato[a.estado_pago] ?? 99
       const pagoB = ordenPagoContrato[b.estado_pago] ?? 99
       if (pagoA !== pagoB) return pagoA - pagoB
@@ -344,8 +470,6 @@ function estadoContratoStyle(estado) {
   const m = {
     ACTIVO: 'background:#fee2e2; color:#991b1b;',
     FINALIZADO: 'background:#dcfce7; color:#166534;',
-    VENCIDO: 'background:#fef3c7; color:#92400e;',
-    PENDIENTE: 'background:#f3f4f6; color:#6b7280;',
     ANULADO: 'background:#f3f4f6; color:#9ca3af;',
   }
   return m[estado] || 'background:#f3f4f6; color:#6b7280;'
@@ -369,6 +493,125 @@ async function verContrato(c) {
     Swal.fire({ icon: 'error', title: 'Error', text: e.response?.data?.message || 'No se pudo cargar el contrato.', confirmButtonColor: '#922b21' })
   } finally {
     cargandoPdf.value = null
+  }
+}
+
+async function anularContrato(c) {
+  const { value: motivo, isConfirmed } = await Swal.fire({
+    icon: 'warning',
+    title: `¿Anular contrato ${c.numero_contrato}?`,
+    html: 'El vehículo se libera y, si viene de una reserva, la reserva vuelve a <strong>Pendiente</strong>.<br><small>Primero deben cancelarse los pagos y anularse los cargos e incidencias vigentes.</small>',
+    input: 'textarea',
+    inputPlaceholder: 'Motivo de la anulación',
+    inputAttributes: { maxlength: 500 },
+    inputValidator: (v) => (!v || !v.trim() ? 'Debe indicar el motivo de la anulación.' : undefined),
+    showCancelButton: true,
+    confirmButtonText: 'Anular contrato',
+    cancelButtonText: 'Volver',
+    confirmButtonColor: '#922b21',
+    cancelButtonColor: '#6b7280',
+    background: isDark.value ? '#1f2937' : '#fff',
+    color: isDark.value ? '#f3f4f6' : '#111827',
+  })
+  if (!isConfirmed) return
+  anulando.value = c.id
+  try {
+    await store.anular(c.id, motivo.trim())
+    toastSuccess('Contrato anulado', c.numero_contrato)
+  } catch (e) {
+    const errores = Object.values(e.response?.data?.errors || {}).flat().join(' ')
+    Swal.fire({
+      icon: 'error',
+      title: 'No se pudo anular',
+      text: errores || e.response?.data?.message || 'Error al anular el contrato.',
+      confirmButtonColor: '#922b21',
+    })
+  } finally {
+    anulando.value = null
+  }
+}
+
+// menu "Mas": las acciones que no van a la vista para que la columna no se llene
+const menuAcciones = ref(null)
+
+function puedeRegistrarPago(c) {
+  return c.estado_pago !== 'PAGADO' && c.estado_contrato !== 'ANULADO'
+}
+
+function irAPagos(c) {
+  router.push({ name: 'pagos', query: { contrato_id: c.id, cobrar: '1' } })
+}
+
+function accionesExtra(c) {
+  if (c.estado_contrato !== 'ACTIVO') return []
+  const acciones = []
+  if (puedeRegistrarPago(c)) acciones.push({ id: 'pago', texto: 'Registrar pago', icono: 'pi-dollar', ejecutar: () => irAPagos(c) })
+  acciones.push({ id: 'vehiculo', texto: 'Cambiar vehículo', icono: 'pi-sync', ejecutar: () => abrirCambioVehiculo(c) })
+  if (authStore.isAdmin) acciones.push({ id: 'anular', texto: 'Anular contrato', icono: 'pi-ban', peligro: true, ejecutar: () => anularContrato(c) })
+  return acciones
+}
+
+function abrirMenuAcciones(c, evento) {
+  if (menuAcciones.value?.contrato.id === c.id) {
+    menuAcciones.value = null
+    return
+  }
+  const caja = evento.currentTarget.getBoundingClientRect()
+  const ancho = 190
+  menuAcciones.value = {
+    contrato: c,
+    top: caja.bottom + 6,
+    left: Math.max(8, Math.min(caja.right - ancho, window.innerWidth - ancho - 8)),
+  }
+}
+
+function cerrarMenuAcciones() {
+  menuAcciones.value = null
+}
+
+function ejecutarAccion(accion) {
+  cerrarMenuAcciones()
+  accion.ejecutar()
+}
+
+onMounted(() => {
+  document.addEventListener('click', cerrarMenuAcciones)
+  window.addEventListener('scroll', cerrarMenuAcciones, true)
+  window.addEventListener('resize', cerrarMenuAcciones)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', cerrarMenuAcciones)
+  window.removeEventListener('scroll', cerrarMenuAcciones, true)
+  window.removeEventListener('resize', cerrarMenuAcciones)
+})
+
+async function abrirCambioVehiculo(c) {
+  erroresCambio.value = {}
+  errorCambio.value = ''
+  try {
+    // el detalle trae cliente y combustible
+    contratoCambio.value = await store.fetchContrato(c.id)
+  } catch (e) {
+    Swal.fire({ icon: 'error', title: 'Error', text: e.response?.data?.message || 'No se pudo cargar el contrato.', confirmButtonColor: '#922b21' })
+  }
+}
+
+async function confirmarCambioVehiculo(datos) {
+  if (!contratoCambio.value) return
+  cambiandoVehiculo.value = true
+  erroresCambio.value = {}
+  errorCambio.value = ''
+  try {
+    const actualizado = await store.cambiarVehiculo(contratoCambio.value.id, datos)
+    contratoCambio.value = null
+    toastSuccess('Vehículo cambiado', `${actualizado.numero_contrato} · ${actualizado.vehiculo?.placa || ''}`)
+    await store.fetchContratos()
+  } catch (e) {
+    erroresCambio.value = e.response?.data?.errors || {}
+    errorCambio.value = e.response?.data?.errors ? '' : (e.response?.data?.message || 'No se pudo cambiar el vehículo.')
+  } finally {
+    cambiandoVehiculo.value = false
   }
 }
 
@@ -442,6 +685,85 @@ async function abrirContratoDesdeQuery() {
   text-align: center;
   font-size: 0.75rem;
   font-weight: 700;
+}
+
+.mas-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  height: 2rem;
+  padding: 0 0.6rem;
+  border-radius: 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: transparent;
+  transition: background-color 0.15s ease;
+}
+
+.mas-btn--light {
+  color: #57534e;
+}
+
+.mas-btn--dark {
+  color: #d6d3d1;
+}
+
+.mas-btn:hover,
+.mas-btn--abierto {
+  background: rgba(120, 113, 108, 0.12);
+}
+
+.menu-acciones {
+  position: fixed;
+  z-index: 70;
+  width: 190px;
+  padding: 0.3rem;
+  border-radius: 0.6rem;
+  box-shadow: 0 10px 30px rgba(28, 25, 23, 0.16);
+}
+
+.menu-acciones--light {
+  background: #fff;
+}
+
+.menu-acciones--dark {
+  background: #1f2937;
+}
+
+.menu-acciones__item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-align: left;
+  background: transparent;
+}
+
+.menu-acciones--light .menu-acciones__item {
+  color: #292524;
+}
+
+.menu-acciones--dark .menu-acciones__item {
+  color: #e7e5e4;
+}
+
+.menu-acciones__item:hover {
+  background: rgba(120, 113, 108, 0.12);
+}
+
+.menu-acciones__item .pi {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.menu-acciones__item--peligro,
+.menu-acciones--light .menu-acciones__item--peligro,
+.menu-acciones--dark .menu-acciones__item--peligro {
+  color: #c0392b;
 }
 
 .status-badge {

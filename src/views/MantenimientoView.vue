@@ -21,10 +21,10 @@
     </div>
 
     <div
-      class="rounded-2xl border shadow-sm p-4 mb-5 flex flex-col sm:flex-row gap-3"
+      class="rounded-2xl border shadow-sm p-4 mb-5 flex flex-col sm:flex-row sm:flex-wrap gap-3"
       :class="isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'"
     >
-      <div class="relative flex-1">
+      <div class="relative flex-1 min-w-[220px]">
         <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-sm opacity-40"></i>
         <input
           v-model="search"
@@ -56,6 +56,31 @@
         <option value="PREVENTIVO">Preventivo</option>
         <option value="CORRECTIVO">Correctivo</option>
       </select>
+      <select
+        v-model="filtroVehiculo"
+        class="px-4 py-2.5 rounded-xl border text-sm min-w-[200px]"
+        :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-100' : 'border-gray-300 bg-white'"
+      >
+        <option value="">Todos los vehículos</option>
+        <option v-for="v in vehiculosConMantenimiento" :key="v.id" :value="v.id">{{ v.texto }}</option>
+      </select>
+      <div class="flex items-center gap-2">
+        <label class="text-xs font-semibold" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Desde</label>
+        <input
+          v-model="filtroDesde"
+          type="date"
+          class="px-3 py-2.5 rounded-xl border text-sm"
+          :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-100' : 'border-gray-300 bg-white'"
+        />
+        <label class="text-xs font-semibold" :class="isDark ? 'text-gray-400' : 'text-gray-500'">hasta</label>
+        <input
+          v-model="filtroHasta"
+          type="date"
+          :min="filtroDesde || undefined"
+          class="px-3 py-2.5 rounded-xl border text-sm"
+          :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-100' : 'border-gray-300 bg-white'"
+        />
+      </div>
     </div>
 
     <div
@@ -124,6 +149,7 @@
                     class="w-8 h-8 rounded-lg flex items-center justify-center border transition-all"
                     :class="isDark ? 'border-amber-800 bg-amber-950/30 text-amber-300' : 'border-blue-200 bg-blue-50 text-blue-600'"
                     title="Editar mantenimiento"
+                    data-label="Editar"
                     @click="abrirModalEditar(m)"
                   >
                     <i class="pi pi-pencil text-xs"></i>
@@ -134,6 +160,7 @@
                     class="w-8 h-8 rounded-lg flex items-center justify-center border transition-all"
                     :class="isDark ? 'border-red-800 bg-red-950/40 text-red-300 hover:bg-red-950' : 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100'"
                     title="Anular mantenimiento"
+                    data-label="Anular"
                     @click="confirmarEliminar(m)"
                   >
                     <i class="pi pi-trash text-xs"></i>
@@ -213,7 +240,7 @@ import MantenimientoModal from '@/components/mantenimiento/MantenimientoModal.vu
 import { useMantenimientosStore } from '@/stores/mantenimientos'
 import { useAuthStore } from '@/stores/auth'
 import { useAppTheme } from '@/composables/useAppTheme'
-import { formatFecha, nombreVehiculo } from '@/utils/reservaFormatters'
+import { formatFecha, fechaSoloISO, nombreVehiculo } from '@/utils/reservaFormatters'
 import api from '@/services/api'
 import { fetchAllPaginated } from '@/utils/apiPagination'
 import { toastSuccess } from '@/utils/toast'
@@ -225,6 +252,9 @@ const authStore = useAuthStore()
 const search = ref('')
 const filtroEstado = ref('')
 const filtroTipo = ref('')
+const filtroVehiculo = ref('')
+const filtroDesde = ref('')
+const filtroHasta = ref('')
 const modalAbierto = ref(false)
 const modoEdicion = ref(false)
 const seleccionado = ref(null)
@@ -241,11 +271,35 @@ const lista = computed(() => {
     CANCELADO: 3,
   }
 
-  return [...store.mantenimientos].sort((a, b) => {
+  return store.mantenimientos.filter(coincideVehiculoFecha).sort((a, b) => {
     const porEstado = (prioridadEstado[a.estado] || 99) - (prioridadEstado[b.estado] || 99)
     if (porEstado !== 0) return porEstado
     return new Date(b.fecha || 0) - new Date(a.fecha || 0)
   })
+})
+
+// solo los vehiculos que tienen mantenimientos
+const vehiculosConMantenimiento = computed(() => {
+  const vistos = new Map()
+  store.mantenimientos.forEach((m) => {
+    const id = m.vehiculo_id ?? m.vehiculo?.id
+    if (id && !vistos.has(String(id))) vistos.set(String(id), m.vehiculo)
+  })
+  return [...vistos.entries()]
+    .map(([id, v]) => ({ id, texto: `${v?.placa || 'Sin placa'} · ${nombreVehiculo(v)}` }))
+    .sort((a, b) => a.texto.localeCompare(b.texto))
+})
+
+function coincideVehiculoFecha(m) {
+  if (filtroVehiculo.value && String(m.vehiculo_id ?? m.vehiculo?.id) !== filtroVehiculo.value) return false
+  const fecha = fechaSoloISO(m.fecha)
+  if (filtroDesde.value && fecha < filtroDesde.value) return false
+  if (filtroHasta.value && fecha > filtroHasta.value) return false
+  return true
+}
+
+watch([filtroVehiculo, filtroDesde, filtroHasta], () => {
+  paginaActual.value = 1
 })
 
 const pagination = computed(() => {

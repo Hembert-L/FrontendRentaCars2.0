@@ -4,7 +4,6 @@
       <div
         v-if="visible"
         class="seguro-backdrop fixed inset-0 z-[85] flex items-center justify-center p-3 sm:p-4"
-        @click.self.stop="cerrar"
       >
         <div
           class="seguro-modal w-full max-w-2xl max-h-[92vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col"

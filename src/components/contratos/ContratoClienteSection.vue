@@ -84,20 +84,6 @@
       </div>
 
       <div
-        v-else-if="sinReserva"
-        class="rounded-xl border p-4"
-        :class="isDark ? 'border-green-900/50 bg-green-950/20' : 'border-green-200 bg-green-50'"
-      >
-        <p class="text-sm font-bold flex items-center gap-2" :class="isDark ? 'text-green-300' : 'text-green-900'">
-          <i class="pi pi-bolt"></i>
-          Contrato sin reserva
-        </p>
-        <p class="text-xs mt-2 leading-relaxed" :class="isDark ? 'text-green-200/80' : 'text-green-800'">
-          Este cliente no tiene reservas activas. Puedes continuar y crear un contrato directo con un vehículo disponible.
-        </p>
-      </div>
-
-      <div
         v-else-if="reservas.length && !reservaSeleccionada"
         class="rounded-xl border p-4 space-y-3"
         :class="isDark ? 'border-amber-900/50 bg-amber-950/20' : 'border-amber-200 bg-amber-50'"
@@ -178,7 +164,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { useClientesStore } from '@/stores/clientes'
 import { documentosVigentes } from '@/utils/contratoFormatters'
@@ -229,13 +215,30 @@ function estadoBadge(estado) {
   return map[estado] ?? (isDark.value ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600')
 }
 
+// Igual que en Reserva: sin texto de búsqueda se muestra la primera página de clientes
+async function cargarIniciales() {
+  const id = ++busquedaActiva
+  buscando.value = true
+  try {
+    await clientesStore.fetchClientes({ page: 1 })
+    if (id !== busquedaActiva || terminoBusqueda.value.trim()) return
+    resultados.value = [...clientesStore.clientes]
+  } finally {
+    if (id === busquedaActiva) buscando.value = false
+  }
+}
+
+onMounted(() => {
+  if (!cliente.value) cargarIniciales()
+})
+
 function onBuscar() {
   clearTimeout(timer)
   resultados.value = []
 
   const term = terminoBusqueda.value.trim()
   if (!term) {
-    buscando.value = false
+    timer = setTimeout(cargarIniciales, 350)
     return
   }
 
@@ -270,6 +273,7 @@ function limpiar() {
   resultados.value = []
   buscando.value = false
   emit('cliente-limpiado')
+  cargarIniciales()
 }
 
 defineExpose({ alertaDocs })

@@ -51,11 +51,13 @@
         :usuarios="usuariosPaginados"
         :search="search"
         :filtro-activo="filtroActivo"
+        :filtro-estado="filtroEstado"
         :filtros="filtros"
         :pagination="pagination"
         :loading="store.loading"
         @update:search="search = $event"
         @update:filtro="filtroActivo = $event"
+        @update:filtro-estado="filtroEstado = $event"
         @cambiar-pagina="cambiarPagina"
         @editar="abrirModalEditar"
         @cambiar-estado="cambiarEstado"
@@ -67,6 +69,7 @@
       :visible="modalAbierto"
       :modo-edicion="modoEdicion"
       :usuario="usuarioSeleccionado"
+      :errores-servidor="erroresServidor"
       @guardar="guardarUsuario"
       @cerrar="modalAbierto = false"
     />
@@ -86,7 +89,9 @@ const store = useUsuariosStore()
 
 const search = ref('')
 const filtroActivo = ref('todos')
+const filtroEstado = ref('')
 const modalAbierto = ref(false)
+const erroresServidor = ref(null)
 const modoEdicion = ref(false)
 const usuarioSeleccionado = ref(null)
 const paginaActual = ref(1)
@@ -110,6 +115,10 @@ const usuariosFiltrados = computed(() => {
     lista = lista.filter(
       u => u.roles?.[0]?.name === filtroActivo.value
     )
+  }
+
+  if (filtroEstado.value) {
+    lista = lista.filter(u => String(u.estado || '').toUpperCase() === filtroEstado.value)
   }
 
   if (search.value.trim()) {
@@ -147,7 +156,7 @@ const usuariosPaginados = computed(() => {
   return usuariosFiltrados.value.slice(start, start + usuariosPorPagina)
 })
 
-watch([search, filtroActivo], () => {
+watch([search, filtroActivo, filtroEstado], () => {
   paginaActual.value = 1
 })
 
@@ -182,12 +191,20 @@ async function cambiarEstado(usuario, nuevoEstado) {
 }
 
 async function guardarUsuario(form) {
-  if (modoEdicion.value) {
-    await store.actualizar(form)
-  } else {
-    await store.crear(form)
+  erroresServidor.value = null
+  try {
+    if (modoEdicion.value) {
+      await store.actualizar(form)
+    } else {
+      await store.crear(form)
+    }
+    modalAbierto.value = false
+  } catch (e) {
+    // el modal sigue abierto y muestra lo que rechazó el backend
+    erroresServidor.value = {
+      errors: e.response?.data?.errors || {},
+      message: e.response?.data?.message || 'No se pudo guardar el usuario.',
+    }
   }
-
-  modalAbierto.value = false
 }
 </script>

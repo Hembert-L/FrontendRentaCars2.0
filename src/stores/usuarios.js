@@ -59,6 +59,7 @@ export const useUsuariosStore = defineStore('usuarios', () => {
         correo:   form.correo,
       }
       if (form.rol) payload.rol = form.rol
+      if (form.password) payload.password = form.password
 
       const res = await api.put(`/admin/usuarios/${form.id}`, payload)
       const idx = usuarios.value.findIndex(u => u.id === form.id)

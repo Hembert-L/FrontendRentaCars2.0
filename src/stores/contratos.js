@@ -3,6 +3,13 @@ import { ref } from 'vue'
 import api from '@/services/api'
 import { fetchAllPaginated } from '@/utils/apiPagination'
 
+// hora local, con toISOString se guardaba 6 horas adelantada
+function fechaHoraLocal() {
+  const d = new Date()
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
 export const useContratosStore = defineStore('contratos', () => {
   const contratos = ref([])
   const loading   = ref(false)
@@ -63,15 +70,21 @@ export const useContratosStore = defineStore('contratos', () => {
       contrato_id: contratoId,
       ...form,
     })
+    // si hubo retraso y queda saldo el back responde 200 pero no cierra
+    const cierreCompletado = res.data?.cierre_completado !== false
     const idx = contratos.value.findIndex((c) => c.id === Number(contratoId))
-    if (idx !== -1) {
+    if (cierreCompletado && idx !== -1) {
       contratos.value[idx] = {
         ...contratos.value[idx],
         estado_contrato: 'FINALIZADO',
         cierre_renta: res.data.data,
       }
     }
-    return res.data.data
+    return {
+      cierre_completado: cierreCompletado,
+      message: res.data?.message,
+      data: res.data?.data,
+    }
   }
 
   async function enviarSecuencia(endpoint, elementos, alConfirmar) {
@@ -104,7 +117,7 @@ export const useContratosStore = defineStore('contratos', () => {
       tipo_cargo: cargo.tipo_cargo || 'OTRO',
       descripcion: cargo.concepto || cargo.descripcion || null,
       monto: Number(cargo.monto || 0),
-      fecha_registro: new Date().toISOString().slice(0, 19).replace('T', ' '),
+      fecha_registro: fechaHoraLocal(),
     })), alConfirmar)
   }
 
@@ -120,6 +133,41 @@ export const useContratosStore = defineStore('contratos', () => {
     })), alConfirmar)
   }
 
+  async function actualizarCargo(id, datos) {
+    const res = await api.put(`/admin/cargos-adicionales/${id}`, datos)
+    return res.data.data
+  }
+
+  async function eliminarCargo(id) {
+    await api.delete(`/admin/cargos-adicionales/${id}`)
+  }
+
+  async function actualizarIncidencia(id, datos) {
+    const res = await api.put(`/admin/incidencias/${id}`, datos)
+    return res.data.data
+  }
+
+  async function anularIncidencia(id) {
+    const res = await api.delete(`/admin/incidencias/${id}`)
+    return res.data.data
+  }
+
+  // solo admin, y el contrato no debe tener pagos, cargos ni incidencias
+  async function anular(id, motivo) {
+    const res = await api.patch(`/admin/contratos/${id}/anular`, { motivo })
+    const idx = contratos.value.findIndex((c) => c.id === Number(id))
+    if (idx !== -1) contratos.value[idx] = { ...contratos.value[idx], ...res.data.data }
+    return res.data.data
+  }
+
+  // el precio no cambia, el carro anterior pasa a en proceso
+  async function cambiarVehiculo(id, datos) {
+    const res = await api.post(`/admin/contratos/${id}/cambiar-vehiculo`, datos)
+    const idx = contratos.value.findIndex((c) => c.id === Number(id))
+    if (idx !== -1) contratos.value[idx] = { ...contratos.value[idx], ...res.data.data }
+    return res.data.data
+  }
+
   return {
     contratos,
     loading,
@@ -132,5 +180,11 @@ export const useContratosStore = defineStore('contratos', () => {
     cerrarRenta,
     syncCargos,
     syncIncidencias,
+    actualizarCargo,
+    eliminarCargo,
+    actualizarIncidencia,
+    anularIncidencia,
+    anular,
+    cambiarVehiculo,
   }
 })

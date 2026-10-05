@@ -8,7 +8,8 @@ function extraerListaApi(payload) {
 }
 
 function limpiarPayloadVehiculo(form) {
-  const { estado, ...payload } = form || {}
+  const payload = { ...form }
+  delete payload.estado
   return payload
 }
 
@@ -39,6 +40,32 @@ export const useVehiculosStore = defineStore('vehiculos', () => {
     propietarios: false,
   }
   let catalogosPromesa = null
+
+  const todosVehiculos = ref([])
+  const todosVehiculosCargados = ref(false)
+  let todosVehiculosPromesa = null
+
+  async function fetchTodosVehiculos(force = false) {
+    if (!force && todosVehiculosCargados.value) return todosVehiculos.value
+    if (todosVehiculosPromesa && !force) return todosVehiculosPromesa
+    todosVehiculosPromesa = (async () => {
+      try {
+        const { items } = await fetchAllPaginated((params) => api.get('/admin/vehiculos', { params }))
+        todosVehiculos.value = items
+        todosVehiculosCargados.value = true
+        return items
+      } catch {
+        return todosVehiculos.value
+      } finally {
+        todosVehiculosPromesa = null
+      }
+    })()
+    return todosVehiculosPromesa
+  }
+
+  function invalidarTodosVehiculos() {
+    todosVehiculosCargados.value = false
+  }
 
   function normalizePagination(payload) {
     if (!payload || typeof payload !== 'object' || !Array.isArray(payload.data)) {
@@ -80,6 +107,37 @@ export const useVehiculosStore = defineStore('vehiculos', () => {
     }
   }
 
+  // para filtros que el back no tiene (categoria, propietario): se traen todos y se pagina aqui
+  async function fetchVehiculosFiltrados(params = {}, filtrar, page = 1, perPage = 15) {
+    loading.value = true
+    error.value = null
+    try {
+      const filtros = { ...params }
+      delete filtros.page
+      const { items } = await fetchAllPaginated((p) => api.get('/admin/vehiculos', { params: p }), filtros)
+      const visibles = items.filter(filtrar)
+      const total = visibles.length
+      const lastPage = Math.max(1, Math.ceil(total / perPage))
+      const actual = Math.min(Math.max(1, Number(page) || 1), lastPage)
+      const inicio = (actual - 1) * perPage
+      vehiculos.value = visibles.slice(inicio, inicio + perPage)
+      pagination.value = {
+        current_page: actual,
+        last_page: lastPage,
+        per_page: perPage,
+        total,
+        from: total ? inicio + 1 : 0,
+        to: inicio + vehiculos.value.length,
+      }
+    } catch (e) {
+      error.value = e.response?.data?.message || 'Error al cargar vehículos.'
+      vehiculos.value = []
+      pagination.value = normalizePagination(null)
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function fetchCatalogos(force = false) {
     if (!force && catalogosCargados.marcas && catalogosCargados.categorias && catalogosCargados.propietarios) {
       return { marcas: marcas.value, categorias: categorias.value, propietarios: propietarios.value }
@@ -90,8 +148,8 @@ export const useVehiculosStore = defineStore('vehiculos', () => {
     catalogosPromesa = (async () => {
       try {
         const [marcasRes, catsRes, propsRes] = await Promise.allSettled([
-          api.get('/marcas'),
-          api.get('/categorias'),
+          api.get('/admin/marcas'),
+          api.get('/admin/categorias'),
           fetchAllPaginated((params) => api.get('/admin/propietarios', { params })),
         ])
         marcas.value = marcasRes.status === 'fulfilled' ? extraerListaApi(marcasRes.value.data?.data) : []
@@ -117,7 +175,7 @@ export const useVehiculosStore = defineStore('vehiculos', () => {
       return modelosPorMarca.value[key]
     }
     try {
-      const res = await api.get(`/marcas/${marcaId}/modelos`)
+      const res = await api.get(`/admin/marcas/${marcaId}/modelos`)
       const lista = extraerListaApi(res.data?.data)
       modelosPorMarca.value[key] = lista
       return lista
@@ -202,9 +260,13 @@ export const useVehiculosStore = defineStore('vehiculos', () => {
     propietarios,
     modelosPorMarca,
     catalogosCargando,
+    todosVehiculos,
     fetchVehiculos,
+    fetchVehiculosFiltrados,
     fetchCatalogos,
     fetchModelos,
+    fetchTodosVehiculos,
+    invalidarTodosVehiculos,
     invalidarCatalogos,
     crear,
     actualizar,

@@ -2,7 +2,7 @@
   <div
     class="min-h-screen transition-colors"
     :class="isDark ? 'bg-gray-950' : 'bg-gray-50'"
-    style="font-family: &quot;Sora&quot;, sans-serif"
+    style="font-family: &quot;Montserrat&quot;, sans-serif"
   >
     <!-- Loading -->
     <div v-if="loading" class="flex items-center justify-center h-64">
@@ -366,7 +366,7 @@
                   {{ r.vehiculo?.placa ?? "—" }}
                 </td>
                 <td class="py-3 text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
-                  {{ r.fecha_inicio }}
+                  {{ formatFecha(r.fecha_inicio) }}
                 </td>
                 <td class="py-3">
                   <span
@@ -404,6 +404,7 @@ import api from "@/services/api";
 import DashboardProgressRow from "@/components/dashboard/DashboardProgressRow.vue";
 import DashboardDonutChart from "@/components/dashboard/DashboardDonutChart.vue";
 import DashboardBarChart from "@/components/dashboard/DashboardBarChart.vue";
+import { formatFecha } from "@/utils/reservaFormatters";
 
 const { isDark } = useAppTheme();
 const authStore = useAuthStore();
@@ -446,13 +447,13 @@ const ultimasReservas = ref([]);
 async function fetchDashboard() {
   try {
     loading.value = true;
-    const { data } = await api.get("/dashboard/resumen");
+    const { data } = await api.get("/admin/dashboard/resumen");
     resumen.value = data.resumen;
     reservasPorMes.value = data.graficas.reservas_por_mes;
     vehiculosPorEstado.value = data.graficas.vehiculos_por_estado;
     ultimasReservas.value = data.ultimas_reservas;
   } catch (e) {
-    error.value = e.message;
+    error.value = e.response?.data?.message || e.message;
   } finally {
     loading.value = false;
   }
@@ -524,6 +525,5 @@ function estadoBadge(estado) {
 </script>
 
 <style scoped>
-@import url("https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&display=swap");
 </style>
 

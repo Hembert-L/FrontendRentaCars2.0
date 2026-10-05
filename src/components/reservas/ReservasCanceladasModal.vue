@@ -52,6 +52,23 @@
                 Buscar
               </button>
             </div>
+            <div class="flex items-center gap-2 mt-2 text-xs">
+              <span class="opacity-60 whitespace-nowrap">Cancelada desde</span>
+              <input
+                v-model="desde"
+                type="date"
+                class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border text-xs focus:outline-none"
+                :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-100' : 'border-red-100 bg-white'"
+              />
+              <span class="opacity-60">hasta</span>
+              <input
+                v-model="hasta"
+                type="date"
+                :min="desde || undefined"
+                class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border text-xs focus:outline-none"
+                :class="isDark ? 'border-gray-700 bg-gray-800 text-gray-100' : 'border-red-100 bg-white'"
+              />
+            </div>
           </div>
 
           <!-- Lista -->
@@ -168,6 +185,7 @@ import { computed, ref, watch } from 'vue'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { useReservasStore } from '@/stores/reservas'
 import { formatFecha, nombreVehiculo } from '@/utils/reservaFormatters'
+import { fechaLocalISO } from '@/utils/contratoFormatters'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -179,7 +197,19 @@ const { isDark } = useAppTheme()
 const store = useReservasStore()
 
 const busqueda = ref('')
-const lista = ref([])
+const desde = ref('')
+const hasta = ref('')
+const todas = ref([])
+// filtro de fechas aqui, el back solo filtra si van las dos fechas
+const lista = computed(() => todas.value.filter((item) => {
+  const fecha = fechaLocalISO(item.fecha_cancelacion)
+  if (desde.value && fecha < desde.value) return false
+  if (hasta.value && fecha > hasta.value) return false
+  return true
+}))
+watch([desde, hasta], () => {
+  paginaActual.value = 1
+})
 const cargando = ref(false)
 const paginaActual = ref(1)
 const registrosPorPagina = 5
@@ -210,6 +240,8 @@ watch(
   (v) => {
     if (v) {
       busqueda.value = ''
+      desde.value = ''
+      hasta.value = ''
       paginaActual.value = 1
       cargar()
     }
@@ -220,11 +252,11 @@ async function cargar() {
   cargando.value = true
   paginaActual.value = 1
   try {
-    lista.value = await store.fetchCancelaciones({
+    todas.value = await store.fetchCancelaciones({
       search: busqueda.value.trim() || undefined,
     })
   } catch {
-    lista.value = []
+    todas.value = []
   } finally {
     cargando.value = false
   }
