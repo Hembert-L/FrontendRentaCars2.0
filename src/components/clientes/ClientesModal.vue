@@ -70,7 +70,6 @@
               <div>
                 <label class="field-label">Vencimiento de DUI</label>
                 <div class="relative">
-                  <i class="pi pi-calendar input-icon"></i>
                   <input
                     v-model="form.vencimiento_dui"
                     type="date"
@@ -103,7 +102,6 @@
               <div>
                 <label class="field-label">Vencimiento de licencia</label>
                 <div class="relative">
-                  <i class="pi pi-calendar input-icon"></i>
                   <input
                     v-model="form.vencimiento_licencia"
                     type="date"
@@ -533,7 +531,7 @@ function fechaPosteriorAHoy(value) {
 .modal-panel-dark .field-input { border:1px solid #4b5563; background:#1f2937; color:#f3f4f6; }
 .modal-panel-dark .field-input:focus { background:#111827; }
 .modal-panel-dark .field-input.error { border-color:#f87171; background:#450a0a; }
-.modal-panel-dark .field-input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.85); }
+.field-input[type="date"] { padding-left:1rem; }
 </style>
 
 
