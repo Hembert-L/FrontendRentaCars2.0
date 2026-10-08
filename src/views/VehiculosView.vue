@@ -51,6 +51,7 @@
           </span>
           <span>{{ tab.label }}</span>
           <span
+            v-if="conteoTab(tab.value) !== null"
             class="min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-bold leading-none inline-flex items-center justify-center"
             :class="
               activeTab === tab.value
@@ -717,6 +718,7 @@ const modoEdicion = ref(false);
 const vehiculoSeleccionado = ref(null);
 const modelos = ref([]);
 const cargandoModelos = ref(false);
+const modelosCargados = ref(false);
 const catalogoPaginaActual = ref(1);
 const catalogoItemsPorPagina = 10;
 const seguroModalAbierto = ref(false);
@@ -845,13 +847,27 @@ const subtitulos = {
   seguros: "Administra las pólizas vigentes de la flota",
 };
 
-onMounted(() => {
-  cargarVehiculos();
-  store.fetchCatalogos();
-  store.fetchTodosVehiculos();
-  cargarModelos();
-  if (puedeVerSeguros.value) segurosStore.fetchSeguros().catch(() => {});
-  if (route.query.tab) cambiarTab(String(route.query.tab));
+// cada pestaña pide sus datos solo cuando se abre
+const tabsCargadas = ref(new Set());
+
+function cargarDatosTab(tab) {
+  // en vehiculos los filtros de categoria y propietario usan los catalogos
+  if (["vehiculos", "marcas", "categorias", "propietarios"].includes(tab)) store.fetchCatalogos();
+  if (["marcas", "modelos"].includes(tab) && !modelosCargados.value) cargarModelos();
+  if (["categorias", "modelos", "propietarios"].includes(tab)) store.fetchTodosVehiculos();
+  if (tab === "seguros" && puedeVerSeguros.value && !seguros.value.length)
+    segurosStore.fetchSeguros().catch(() => {});
+  tabsCargadas.value.add(tab);
+}
+
+onMounted(async () => {
+  const tabInicial = route.query.tab ? String(route.query.tab) : "vehiculos";
+  if (tabInicial !== "vehiculos" && tabsVisibles.value.some((t) => t.value === tabInicial)) {
+    cambiarTab(tabInicial);
+    return;
+  }
+  await cargarVehiculos();
+  cargarDatosTab("vehiculos");
 });
 
 watch(() => route.query.tab, (tab) => {
@@ -959,6 +975,8 @@ watch(catalogoPagination, (value) => {
 
 function conteoTab(tab) {
   if (tab === "vehiculos") return store.total;
+  // sin abrir la pestaña todavia no hay datos para contar
+  if (!tabsCargadas.value.has(tab)) return null;
   return listaTab(tab).length;
 }
 
@@ -1056,8 +1074,7 @@ function cambiarTab(tab) {
   }
   if (tab !== "seguros") filtroVigencia.value = "";
   if (tab === "vehiculos") cargarVehiculos(1);
-  if (tab === "seguros" && !seguros.value.length && puedeVerSeguros.value)
-    segurosStore.fetchSeguros().catch(() => {});
+  cargarDatosTab(tab);
 }
 
 function vehiculosParams(page = pagination.value.current_page || 1) {
@@ -1810,6 +1827,7 @@ async function cargarModelos() {
   try {
     const { items } = await fetchAllPaginated((params) => api.get("/admin/modelos", { params }));
     modelos.value = items;
+    modelosCargados.value = true;
   } catch {
     modelos.value = [];
   } finally {
