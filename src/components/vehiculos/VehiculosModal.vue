@@ -186,24 +186,30 @@
                     </p>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <button
-                        v-for="c in categorias"
+                        v-for="c in categoriasCompatibles"
                         :key="c.id"
                         type="button"
                         class="veh-cat-card"
-                        :class="{ 'veh-cat-card--active': form.categoria_id == c.id, 'opacity-50': !categoriaAceptaPasajeros(c) }"
+                        :class="{ 'veh-cat-card--active': form.categoria_id == c.id }"
                         @click="seleccionarCategoria(c.id)"
                       >
                         <span class="font-bold text-sm flex items-center gap-1.5">
                           {{ c.nombre }}
                         </span>
                         <span class="text-xs opacity-75">${{ Number(c.precio_dia).toFixed(2) }}/día</span>
-                        <span v-if="c.capacidad_minima && c.capacidad_maxima" class="text-xs opacity-75">
-                          {{ c.capacidad_minima }} a {{ c.capacidad_maxima }} pasajeros
+                        <span v-if="c.capacidad_maxima" class="text-xs opacity-75">
+                          Hasta {{ c.capacidad_maxima }} pasajeros
                         </span>
                       </button>
                     </div>
                     <p v-if="errors.categoria_id" class="veh-error">{{ errors.categoria_id }}</p>
                     <p v-if="!categorias.length" class="text-xs mt-2 opacity-60">No hay categorías. Agrégalas desde el catálogo.</p>
+                    <p v-else-if="!categoriasCompatibles.length" class="veh-error">
+                      Ninguna categoría acepta {{ form.capacidad_pasajeros }} pasajeros. Corrige los pasajeros en el paso 1 o ajusta el rango de una categoría en el catálogo.
+                    </p>
+                    <p v-else-if="categoriasCompatibles.length < categorias.length" class="veh-hint">
+                      Solo se muestran las categorías que aceptan {{ form.capacidad_pasajeros }} pasajeros.
+                    </p>
                   </div>
 
                   <div class="veh-field">
@@ -366,12 +372,16 @@ const modelosDisponibles = computed(() => {
 // Tope general de pasajeros; el rango exacto lo pone cada categoría
 const PASAJEROS_MAX = 15
 
-// La categoría acepta los pasajeros escritos en el paso 1 (si la categoría no trae rango, no se limita)
+// La categoría acepta los pasajeros escritos en el paso 1 si no pasan su máximo
+// (si la categoría no trae máximo, no se limita)
 function categoriaAceptaPasajeros(categoria) {
   const pasajeros = Number(form.capacidad_pasajeros)
-  if (!categoria?.capacidad_minima || !categoria?.capacidad_maxima || !pasajeros) return true
-  return pasajeros >= Number(categoria.capacidad_minima) && pasajeros <= Number(categoria.capacidad_maxima)
+  if (!categoria?.capacidad_maxima || !pasajeros) return true
+  return pasajeros <= Number(categoria.capacidad_maxima)
 }
+
+// Solo se muestran las categorías cuyo rango incluye los pasajeros del paso 1
+const categoriasCompatibles = computed(() => categorias.value.filter(categoriaAceptaPasajeros))
 
 const coloresFormulario = computed(() => {
   const base = coloresRapidos.map((c) => c.nombre)
@@ -460,6 +470,13 @@ function seleccionarCategoria(catId) {
   form.categoria_id = catId
 }
 
+// Si se cambian los pasajeros y la categoría elegida ya no los acepta, se quita la selección
+watch(() => form.capacidad_pasajeros, () => {
+  if (!form.categoria_id) return
+  const actual = categorias.value.find((c) => c.id == form.categoria_id)
+  if (actual && !categoriaAceptaPasajeros(actual)) form.categoria_id = ''
+})
+
 function seleccionarTipoPropietario(tipo) {
   tipoPropietario.value = tipo
   busquedaPropietario.value = ''
@@ -496,7 +513,7 @@ function validarPaso2() {
   const categoria = categorias.value.find((c) => c.id == form.categoria_id)
   if (!form.categoria_id) { errors.categoria_id = 'Selecciona una categoría'; ok = false }
   else if (!categoriaAceptaPasajeros(categoria)) {
-    errors.categoria_id = `La categoría ${categoria.nombre} acepta de ${categoria.capacidad_minima} a ${categoria.capacidad_maxima} pasajeros y este vehículo tiene ${form.capacidad_pasajeros}. Elige otra categoría o corrige los pasajeros en el paso 1.`
+    errors.categoria_id = `La categoría ${categoria.nombre} acepta máximo ${categoria.capacidad_maxima} pasajeros y este vehículo tiene ${form.capacidad_pasajeros}. Elige otra categoría o corrige los pasajeros en el paso 1.`
     ok = false
   }
   if (!form.propietario_id) { errors.propietario_id = 'Selecciona un propietario'; ok = false }
