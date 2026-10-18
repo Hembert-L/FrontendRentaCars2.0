@@ -112,7 +112,7 @@
                         :class="{ 'veh-input--error': errors.capacidad_pasajeros }"
                       />
                       <p v-if="errors.capacidad_pasajeros" class="veh-error">{{ errors.capacidad_pasajeros }}</p>
-                      <p v-else class="veh-hint">El rango permitido depende de la categoría (paso 2)</p>
+                      <p v-else class="veh-hint">El máximo permitido depende de la categoría (paso 2)</p>
                     </div>
                   </div>
 
@@ -205,7 +205,7 @@
                     <p v-if="errors.categoria_id" class="veh-error">{{ errors.categoria_id }}</p>
                     <p v-if="!categorias.length" class="text-xs mt-2 opacity-60">No hay categorías. Agrégalas desde el catálogo.</p>
                     <p v-else-if="!categoriasCompatibles.length" class="veh-error">
-                      Ninguna categoría acepta {{ form.capacidad_pasajeros }} pasajeros. Corrige los pasajeros en el paso 1 o ajusta el rango de una categoría en el catálogo.
+                      Ninguna categoría acepta {{ form.capacidad_pasajeros }} pasajeros. Corrige los pasajeros en el paso 1 o sube el máximo de pasajeros de una categoría en el catálogo.
                     </p>
                     <p v-else-if="categoriasCompatibles.length < categorias.length" class="veh-hint">
                       Solo se muestran las categorías que aceptan {{ form.capacidad_pasajeros }} pasajeros.
@@ -369,7 +369,7 @@ const modelosDisponibles = computed(() => {
   return modelosPorMarca.value[String(marcaId.value)] ?? modelos.value
 })
 
-// Tope general de pasajeros; el rango exacto lo pone cada categoría
+// tope general de pasajeros, el maximo de cada categoria va aparte
 const PASAJEROS_MAX = 15
 
 // La categoría acepta los pasajeros escritos en el paso 1 si no pasan su máximo
@@ -380,7 +380,7 @@ function categoriaAceptaPasajeros(categoria) {
   return pasajeros <= Number(categoria.capacidad_maxima)
 }
 
-// Solo se muestran las categorías cuyo rango incluye los pasajeros del paso 1
+// solo las categorias que aguantan los pasajeros del paso 1
 const categoriasCompatibles = computed(() => categorias.value.filter(categoriaAceptaPasajeros))
 
 const coloresFormulario = computed(() => {
