@@ -16,14 +16,12 @@
       <div v-if="!modoDirecto">
         <label class="text-xs font-semibold mb-1 block" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Entrega - fecha</label>
         <div class="relative">
-          <i class="pi pi-calendar input-icon"></i>
           <input :value="fechaEntrega" type="date" :min="bloqueado ? undefined : hoy" :disabled="bloqueado" class="field-input" @input="$emit('update:fechaEntrega', $event.target.value)" />
         </div>
       </div>
       <div :class="modoDirecto ? 'sm:col-span-2' : ''">
         <label class="text-xs font-semibold mb-1 block" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Devolución - fecha</label>
         <div class="relative">
-          <i class="pi pi-calendar input-icon"></i>
           <input :value="fechaDevolucion" type="date" :min="bloqueado ? undefined : minFechaDevolucion" :max="bloqueado ? undefined : fechaMaxima" :disabled="bloqueado" class="field-input" @input="$emit('update:fechaDevolucion', $event.target.value)" />
         </div>
       </div>
@@ -262,6 +260,7 @@ function normalizarBusqueda(valor) {
 .input-icon { position:absolute; left:0.75rem; top:50%; transform:translateY(-50%); font-size:0.875rem; pointer-events:none; }
 .field-input { width:100%; padding:0.75rem 1rem 0.75rem 2.5rem; border-radius:0.75rem; font-size:0.875rem; outline:none; }
 .field-input--plain { padding-left:1rem; }
+.field-input[type="date"] { padding-left:1rem; }
 .field-input:disabled { opacity:0.7; cursor:not-allowed; }
 .form-section-light .field-label { color:#4b5563; }
 .form-section-light .input-icon { color:#9ca3af; }

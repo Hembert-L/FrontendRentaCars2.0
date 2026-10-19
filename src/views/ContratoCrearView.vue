@@ -75,7 +75,6 @@
               v-else
               v-model:descuento="descuento"
               v-model:nivel-combustible="nivelCombustible"
-              v-model:observaciones-entrega="observacionesEntrega"
               :dias="dias"
               :precio-dia="precioDia"
             />
@@ -181,7 +180,6 @@ const cargandoVehiculos = ref(false)
 const vehiculosConsultados = ref(false)
 const descuento = ref(0)
 const nivelCombustible = ref('1/2')
-const observacionesEntrega = ref('')
 const generando = ref(false)
 const error = ref('')
 const contratoGenerado = ref(null)
@@ -542,7 +540,6 @@ async function generarContrato() {
       precio_por_dia:            precioDia.value,
       monto_descuento:           descuento.value,
       nivel_combustible_entrega: nivelCombustible.value,
-      observaciones_entrega:     observacionesEntrega.value,
     }
     if (reservaId.value) {
       payload.reserva_id = reservaId.value

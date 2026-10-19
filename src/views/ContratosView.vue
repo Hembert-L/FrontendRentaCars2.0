@@ -283,6 +283,7 @@ import ContratoPdfPreview from '@/components/contratos/ContratoPdfPreview.vue'
 import ContratoCambiarVehiculoModal from '@/components/contratos/ContratoCambiarVehiculoModal.vue'
 import { useContratosStore } from '@/stores/contratos'
 import { useAuthStore } from '@/stores/auth'
+import { puedeHacer } from '@/utils/permisos'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { toastSuccess } from '@/utils/toast'
 import {
@@ -535,6 +536,7 @@ async function anularContrato(c) {
 const menuAcciones = ref(null)
 
 function puedeRegistrarPago(c) {
+  if (!puedeHacer(authStore.userRoles, 'registrarPago')) return false
   return c.estado_pago !== 'PAGADO' && c.estado_contrato !== 'ANULADO'
 }
 

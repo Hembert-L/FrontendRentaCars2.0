@@ -43,6 +43,7 @@
               <textarea
                 v-model="motivo"
                 rows="3"
+                maxlength="500"
                 class="field-input w-full resize-none"
                 :class="error ? 'error' : ''"
                 placeholder="Indica por qué se cancela la reserva..."
@@ -123,6 +124,10 @@ async function confirmar() {
   const motivoValidado = motivo.value.trim()
   if (motivoValidado.length < 3) {
     error.value = 'El motivo debe tener al menos 3 caracteres'
+    return
+  }
+  if (motivoValidado.length > 500) {
+    error.value = 'El motivo no puede tener más de 500 caracteres'
     return
   }
 

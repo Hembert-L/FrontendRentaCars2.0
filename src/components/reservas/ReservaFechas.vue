@@ -12,7 +12,6 @@
       <div>
         <label class="text-xs font-semibold mb-1 block" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Fecha de inicio</label>
         <div class="relative">
-          <i class="pi pi-calendar input-icon"></i>
           <input
             :value="fechaInicio"
             type="date"
@@ -28,7 +27,6 @@
       <div>
         <label class="text-xs font-semibold mb-1 block" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Fecha de fin</label>
         <div class="relative">
-          <i class="pi pi-calendar input-icon"></i>
           <input
             :value="fechaFin"
             type="date"
@@ -102,5 +100,5 @@ function sumarUnDia(fecha) {
 .form-section-dark .field-input { border:1px solid #4b5563; background:#1f2937; color:#f3f4f6; }
 .form-section-dark .field-input:focus { background:#111827; border-color:#922b21; }
 .form-section-dark .field-input.error { border-color:#f87171; background:#450a0a; }
-.form-section-dark .field-input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.85); }
+.field-input[type="date"] { padding-left:1rem; }
 </style>

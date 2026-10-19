@@ -58,17 +58,10 @@
               <p v-if="errors.precio_dia" class="field-error">{{ errors.precio_dia }}</p>
             </div>
 
-            <div v-if="tipo === 'categoria'" class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="field-label">Mín. pasajeros</label>
-                <input v-model="form.capacidad_minima" type="number" min="1" max="15" step="1" class="field-input" :class="inputClass(errors.capacidad_minima)" placeholder="2" />
-                <p v-if="errors.capacidad_minima" class="field-error">{{ errors.capacidad_minima }}</p>
-              </div>
-              <div>
-                <label class="field-label">Máx. pasajeros</label>
-                <input v-model="form.capacidad_maxima" type="number" min="1" max="15" step="1" class="field-input" :class="inputClass(errors.capacidad_maxima)" placeholder="5" />
-                <p v-if="errors.capacidad_maxima" class="field-error">{{ errors.capacidad_maxima }}</p>
-              </div>
+            <div v-if="tipo === 'categoria'">
+              <label class="field-label">Máximo de pasajeros</label>
+              <input v-model="form.capacidad_maxima" type="number" min="1" max="15" step="1" class="field-input" :class="inputClass(errors.capacidad_maxima)" placeholder="5" />
+              <p v-if="errors.capacidad_maxima" class="field-error">{{ errors.capacidad_maxima }}</p>
             </div>
 
             <div v-if="tipo === 'propietario'">
@@ -141,8 +134,8 @@ const marcas = ref([])
 const categoriasExistentes = ref([])
 const modelosExistentes = ref([])
 const propietariosExistentes = ref([])
-const form = reactive({ nombre: '', precio_dia: '', marca_id: '', capacidad_minima: '', capacidad_maxima: '', telefono: '', pais_telefono: CODIGO_PAIS_DEFAULT, tipo_propietario: '' })
-const errors = reactive({ nombre: '', precio_dia: '', marca_id: '', capacidad_minima: '', capacidad_maxima: '', telefono: '', tipo_propietario: '' })
+const form = reactive({ nombre: '', precio_dia: '', marca_id: '', capacidad_maxima: '', telefono: '', pais_telefono: CODIGO_PAIS_DEFAULT, tipo_propietario: '' })
+const errors = reactive({ nombre: '', precio_dia: '', marca_id: '', capacidad_maxima: '', telefono: '', tipo_propietario: '' })
 const nombreFlexibleRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 ./'-]+$/
 const nombrePersonaRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ '-]+$/
 const contieneLetraRegex = /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/
@@ -266,7 +259,6 @@ watch(
     form.nombre = ''
     form.precio_dia = ''
     form.marca_id = ''
-    form.capacidad_minima = ''
     form.capacidad_maxima = ''
     form.telefono = ''
     form.pais_telefono = CODIGO_PAIS_DEFAULT
@@ -344,17 +336,9 @@ function validar() {
       errors.precio_dia = 'Ya existe una categoría con ese precio por día.'
       ok = false
     }
-    const minimo = Number(form.capacidad_minima)
     const maximo = Number(form.capacidad_maxima)
-    if (!form.capacidad_minima || !Number.isInteger(minimo) || minimo < 1 || minimo > 15) {
-      errors.capacidad_minima = 'Entre 1 y 15.'
-      ok = false
-    }
     if (!form.capacidad_maxima || !Number.isInteger(maximo) || maximo < 1 || maximo > 15) {
-      errors.capacidad_maxima = 'Entre 1 y 15.'
-      ok = false
-    } else if (!errors.capacidad_minima && maximo < minimo) {
-      errors.capacidad_maxima = 'No puede ser menor que el mínimo.'
+      errors.capacidad_maxima = 'Indica un número entero de pasajeros entre 1 y 15.'
       ok = false
     }
   }
@@ -407,7 +391,6 @@ async function handleGuardar() {
       res = await api.post('/admin/categorias', {
         nombre,
         precio_dia: Number(form.precio_dia),
-        capacidad_minima: Number(form.capacidad_minima),
         capacidad_maxima: Number(form.capacidad_maxima),
       })
     } else if (props.tipo === 'modelo') {

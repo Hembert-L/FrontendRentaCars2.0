@@ -76,19 +76,6 @@
           </button>
         </div>
       </div>
-
-      <label class="field-label mt-4">Observaciones previas</label>
-      <textarea
-        :value="observacionesEntrega"
-        rows="4"
-        maxlength="500"
-        class="field-input w-full resize-none field-input--plain"
-        placeholder="Rayones, golpes, estado general..."
-        @input="$emit('update:observacionesEntrega', $event.target.value)"
-      ></textarea>
-      <p class="text-[11px] text-right mt-1" :class="isDark ? 'text-gray-500' : 'text-gray-400'">
-        {{ (observacionesEntrega || '').length }}/500
-      </p>
     </div>
   </section>
 </template>
@@ -103,10 +90,9 @@ const props = defineProps({
   precioDia:            { type: Number, default: 0 },
   descuento:            { type: Number, default: 0 },
   nivelCombustible:     { type: String, default: '1/2' },
-  observacionesEntrega: { type: String, default: '' },
 })
 
-const emit = defineEmits(['update:descuento', 'update:nivelCombustible', 'update:observacionesEntrega'])
+const emit = defineEmits(['update:descuento', 'update:nivelCombustible'])
 
 const { isDark } = useAppTheme()
 const shellClass = computed(() => isDark.value ? 'form-section-dark bg-gray-900 border-gray-800' : 'form-section-light bg-white border-gray-100')

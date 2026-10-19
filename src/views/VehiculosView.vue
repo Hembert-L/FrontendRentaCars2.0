@@ -10,7 +10,7 @@
         </p>
       </div>
 
-      <div v-if="puedeEscribirTab" class="w-full sm:w-auto flex-shrink-0">
+      <div v-if="puedeEscribirTab && (activeTab !== 'vehiculos' || puedeCrearEditarVehiculos)" class="w-full sm:w-auto flex-shrink-0">
         <button
           type="button"
           @click="accionNuevo"
@@ -51,6 +51,7 @@
           </span>
           <span>{{ tab.label }}</span>
           <span
+            v-if="conteoTab(tab.value) !== null"
             class="min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-bold leading-none inline-flex items-center justify-center"
             :class="
               activeTab === tab.value
@@ -473,16 +474,17 @@
                     </button>
                   </template>
                   <button
-                    v-if="activeTab !== 'seguros' && puedeEscribirTab"
+                    v-if="activeTab !== 'seguros' && puedeEscribirTab && (activeTab !== 'vehiculos' || puedeCrearEditarVehiculos)"
                     type="button"
                     @click="accionEditar(item)"
-                    class="w-8 h-8 rounded-lg inline-flex items-center justify-center border transition-all hover:shadow-sm"
+                    :disabled="vehiculoEnUso(item)"
+                    class="w-8 h-8 rounded-lg inline-flex items-center justify-center border transition-all hover:shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
                     :class="
                       isDark
                         ? 'border-blue-800 bg-blue-950/40 text-blue-300 hover:bg-blue-950/70 hover:border-blue-700'
                         : 'border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100'
                     "
-                    :title="`Editar ${tabActiva.label.slice(0, -1).toLowerCase()}`"
+                    :title="vehiculoEnUso(item) ? 'No se puede editar: el vehículo está rentado' : `Editar ${tabActiva.label.slice(0, -1).toLowerCase()}`"
                     data-label="Editar"
                   >
                     <i class="pi pi-pencil text-xs"></i>
@@ -684,6 +686,7 @@ import SeguroModal from "@/components/vehiculos/SeguroModal.vue";
 import { useVehiculosStore } from "@/stores/vehiculos";
 import { useSegurosStore } from "@/stores/seguros";
 import { useAuthStore } from "@/stores/auth";
+import { puedeHacer } from "@/utils/permisos";
 import { useAppTheme } from "@/composables/useAppTheme";
 import { fetchAllPaginated } from "@/utils/apiPagination";
 import {
@@ -717,6 +720,7 @@ const modoEdicion = ref(false);
 const vehiculoSeleccionado = ref(null);
 const modelos = ref([]);
 const cargandoModelos = ref(false);
+const modelosCargados = ref(false);
 const catalogoPaginaActual = ref(1);
 const catalogoItemsPorPagina = 10;
 const seguroModalAbierto = ref(false);
@@ -753,6 +757,8 @@ const proximoAVencer = computed(() => segurosStore.proximoAVencer);
 const puedeGestionarVehiculos = computed(() =>
   authStore.userRoles.some((role) => ["ADMINISTRADOR", "EMPLEADO"].includes(role)),
 );
+// crear y editar vehiculos: solo administrador (StoreVehiculoRequest / UpdateVehiculoRequest del back)
+const puedeCrearEditarVehiculos = computed(() => puedeHacer(authStore.userRoles, "gestionarVehiculos"));
 const puedeGestionarCatalogos = computed(() => authStore.userRoles.includes("ADMINISTRADOR"));
 const puedeGestionarPropietarios = computed(() => authStore.userRoles.includes("ADMINISTRADOR"));
 const puedeGestionarSeguros = computed(() => authStore.userRoles.includes("ADMINISTRADOR"));
@@ -812,7 +818,7 @@ const columnasPorTab = {
   categorias: [
     { key: "nombre", label: "Nombre", width: "28%" },
     { key: "descripcion", label: "Tarifa", width: "28%" },
-    { key: "rango_pasajeros", label: "Pasajeros", width: "16%" },
+    { key: "rango_pasajeros", label: "Máx. pasajeros", width: "16%" },
     { key: "vehiculos_count", label: "Vehículos", width: "16%" },
   ],
   modelos: [
@@ -845,13 +851,27 @@ const subtitulos = {
   seguros: "Administra las pólizas vigentes de la flota",
 };
 
-onMounted(() => {
-  cargarVehiculos();
-  store.fetchCatalogos();
-  store.fetchTodosVehiculos();
-  cargarModelos();
-  if (puedeVerSeguros.value) segurosStore.fetchSeguros().catch(() => {});
-  if (route.query.tab) cambiarTab(String(route.query.tab));
+// cada pestaña pide sus datos solo cuando se abre
+const tabsCargadas = ref(new Set());
+
+function cargarDatosTab(tab) {
+  // en vehiculos los filtros de categoria y propietario usan los catalogos
+  if (["vehiculos", "marcas", "categorias", "propietarios"].includes(tab)) store.fetchCatalogos();
+  if (["marcas", "modelos"].includes(tab) && !modelosCargados.value) cargarModelos();
+  if (["categorias", "modelos", "propietarios"].includes(tab)) store.fetchTodosVehiculos();
+  if (tab === "seguros" && puedeVerSeguros.value && !seguros.value.length)
+    segurosStore.fetchSeguros().catch(() => {});
+  tabsCargadas.value.add(tab);
+}
+
+onMounted(async () => {
+  const tabInicial = route.query.tab ? String(route.query.tab) : "vehiculos";
+  if (tabInicial !== "vehiculos" && tabsVisibles.value.some((t) => t.value === tabInicial)) {
+    cambiarTab(tabInicial);
+    return;
+  }
+  await cargarVehiculos();
+  cargarDatosTab("vehiculos");
 });
 
 watch(() => route.query.tab, (tab) => {
@@ -959,6 +979,8 @@ watch(catalogoPagination, (value) => {
 
 function conteoTab(tab) {
   if (tab === "vehiculos") return store.total;
+  // sin abrir la pestaña todavia no hay datos para contar
+  if (!tabsCargadas.value.has(tab)) return null;
   return listaTab(tab).length;
 }
 
@@ -1056,8 +1078,7 @@ function cambiarTab(tab) {
   }
   if (tab !== "seguros") filtroVigencia.value = "";
   if (tab === "vehiculos") cargarVehiculos(1);
-  if (tab === "seguros" && !seguros.value.length && puedeVerSeguros.value)
-    segurosStore.fetchSeguros().catch(() => {});
+  cargarDatosTab(tab);
 }
 
 function vehiculosParams(page = pagination.value.current_page || 1) {
@@ -1166,7 +1187,7 @@ function renderCelda(item, key) {
     nombre: item.nombre,
     modelo: item.nombre,
     marca_nombre: item.marca?.nombre,
-    rango_pasajeros: item.capacidad_minima && item.capacidad_maxima ? `${item.capacidad_minima} a ${item.capacidad_maxima}` : null,
+    rango_pasajeros: item.capacidad_maxima ? `Hasta ${item.capacidad_maxima}` : null,
     modelos_count: item.modelos_count ?? contarModelosPorMarca(item.id),
     vehiculos_count: item.vehiculos_count ?? contarVehiculosRelacionados(item),
     created_at: item.created_at ? formatFecha(item.created_at) : null,
@@ -1313,7 +1334,7 @@ function ordenarVehiculosPorEstado(lista) {
 }
 
 function abrirModalCrear() {
-  if (!puedeGestionarVehiculos.value) return;
+  if (!puedeCrearEditarVehiculos.value) return;
   modoEdicion.value = false;
   vehiculoSeleccionado.value = null;
   modalAbierto.value = true;
@@ -1357,7 +1378,9 @@ async function onCatalogoGuardado({ tipo, modoEdicion: catalogoEditado = false }
 }
 
 function abrirModalEditar(v) {
-  if (!puedeGestionarVehiculos.value) return;
+  if (!puedeCrearEditarVehiculos.value) return;
+  // el back no deja editar un vehiculo rentado (VehiculoController@update)
+  if (v?.estado === "RENTADO") return;
   modoEdicion.value = true;
   vehiculoSeleccionado.value = { ...v };
   modalAbierto.value = true;
@@ -1403,7 +1426,6 @@ async function accionEditar(item) {
         html: `
         <input id="swal-cat-nombre" class="swal2-input" placeholder="Nombre" value="${item.nombre ?? ""}">
         <input id="swal-cat-precio" type="number" min="1" step="0.01" class="swal2-input" placeholder="Precio por día" value="${item.precio_dia ?? ""}">
-        <input id="swal-cat-min" type="number" min="1" max="15" step="1" class="swal2-input" placeholder="Mínimo de pasajeros" value="${item.capacidad_minima ?? ""}">
         <input id="swal-cat-max" type="number" min="1" max="15" step="1" class="swal2-input" placeholder="Máximo de pasajeros" value="${item.capacidad_maxima ?? ""}">
       `,
         showCancelButton: true,
@@ -1433,20 +1455,13 @@ async function accionEditar(item) {
             Swal.showValidationMessage("Ya existe una categoría con ese precio por día");
             return false;
           }
-          const minRaw = document.getElementById("swal-cat-min")?.value;
           const maxRaw = document.getElementById("swal-cat-max")?.value;
-          const capacidad_minima = Number(minRaw);
           const capacidad_maxima = Number(maxRaw);
-          const fueraDeRango = (raw, n) => !raw || !Number.isInteger(n) || n < 1 || n > 15;
-          if (fueraDeRango(minRaw, capacidad_minima) || fueraDeRango(maxRaw, capacidad_maxima)) {
-            Swal.showValidationMessage("El mínimo y el máximo de pasajeros deben ser números enteros entre 1 y 15");
+          if (!maxRaw || !Number.isInteger(capacidad_maxima) || capacidad_maxima < 1 || capacidad_maxima > 15) {
+            Swal.showValidationMessage("El máximo de pasajeros debe ser un número entero entre 1 y 15");
             return false;
           }
-          if (capacidad_maxima < capacidad_minima) {
-            Swal.showValidationMessage("El máximo de pasajeros no puede ser menor que el mínimo");
-            return false;
-          }
-          return { nombre, precio_dia: Number(precioRaw), capacidad_minima, capacidad_maxima };
+          return { nombre, precio_dia: Number(precioRaw), capacidad_maxima };
         },
       });
       if (!isConfirmed || !puedeGestionarCatalogos.value) return;
@@ -1810,6 +1825,7 @@ async function cargarModelos() {
   try {
     const { items } = await fetchAllPaginated((params) => api.get("/admin/modelos", { params }));
     modelos.value = items;
+    modelosCargados.value = true;
   } catch {
     modelos.value = [];
   } finally {
