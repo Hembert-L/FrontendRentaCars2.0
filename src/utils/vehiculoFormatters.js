@@ -21,7 +21,6 @@ export function nombreVehiculo(v) {
 export function labelEstadoVehiculo(estado) {
   const map = {
     DISPONIBLE: 'Disponible',
-    RESERVADO: 'Reservado',
     RENTADO: 'Rentado',
     'EN PROCESO': 'En proceso',
     MANTENIMIENTO: 'Mantenimiento',
@@ -34,7 +33,6 @@ export function estadoVehiculoStyle(estado, isDark = false) {
   if (isDark) {
     const m = {
       DISPONIBLE: 'background:#14532d; color:#86efac; border:1px solid #166534;',
-      RESERVADO: 'background:#1e3a5f; color:#93c5fd; border:1px solid #1e40af;',
       RENTADO: 'background:#7f1d1d; color:#fca5a5; border:1px solid #991b1b;',
       'EN PROCESO': 'background:#4c1d95; color:#ddd6fe; border:1px solid #6d28d9;',
       MANTENIMIENTO: 'background:#713f12; color:#fde68a; border:1px solid #854d0e;',
@@ -44,7 +42,6 @@ export function estadoVehiculoStyle(estado, isDark = false) {
   }
   const m = {
     DISPONIBLE: 'background:#dcfce7; color:#166534;',
-    RESERVADO: 'background:#dbeafe; color:#1e40af;',
     RENTADO: 'background:#fee2e2; color:#991b1b;',
     'EN PROCESO': 'background:#ede9fe; color:#5b21b6;',
     MANTENIMIENTO: 'background:#fef9c3; color:#854d0e;',

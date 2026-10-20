@@ -696,6 +696,7 @@ import {
   ESTADOS_VEHICULO_TODOS,
 } from "@/utils/vehiculoFormatters";
 import { toastSuccess } from "@/utils/toast";
+import { errorNombrePersona, errorTexto } from "@/utils/validacionesTexto";
 
 const { isDark } = useAppTheme();
 const store = useVehiculosStore();
@@ -734,16 +735,11 @@ const seguroMensaje = ref("");
 const estadosFiltro = ESTADOS_VEHICULO_TODOS;
 const ordenEstadosVehiculo = {
   DISPONIBLE: 1,
-  RESERVADO: 2,
   RENTADO: 2.5,
   "EN PROCESO": 2.75,
   MANTENIMIENTO: 3,
   "FUERA DE SERVICIO": 4,
 };
-const nombreFlexibleRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 ./'-]+$/;
-const nombrePersonaRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ '-]+$/;
-const nombreCategoriaRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ '-]*$/;
-const nombreMarcaRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ .'&-]*$/;
 const vehiculos = computed(() => store.vehiculos);
 const pagination = computed(() => store.pagination);
 const puedeRetroceder = computed(() => pagination.value.current_page > 1);
@@ -1147,19 +1143,12 @@ function validarNombreCatalogo(value, tipo, max = 80) {
   if (!nombre) return "El nombre es obligatorio";
   if (nombre.length < 2) return "El nombre debe tener al menos 2 caracteres";
   if (nombre.length > max) return `El nombre no puede tener más de ${max} caracteres`;
-  if (tipo === "propietario" && !nombrePersonaRegex.test(nombre)) {
-    return "El nombre solo debe contener letras y signos básicos";
-  }
-  if (tipo === "categoria" && !nombreCategoriaRegex.test(nombre)) {
-    return "La categoría solo puede llevar letras y espacios";
-  }
-  if (tipo === "marca" && !nombreMarcaRegex.test(nombre)) {
-    return "La marca solo puede llevar letras, espacios, punto o guion";
-  }
-  if (tipo === "modelo" && !nombreFlexibleRegex.test(nombre)) {
-    return "El nombre contiene caracteres no permitidos";
-  }
-  return null;
+  let error = "";
+  if (tipo === "propietario") error = errorNombrePersona(nombre, { palabrasMinimas: 1 });
+  if (tipo === "categoria") error = errorTexto(nombre, { campo: "La categoría", minLetras: 3, simbolos: "-" });
+  if (tipo === "marca") error = errorTexto(nombre, { campo: "La marca", minLetras: 2, simbolos: ".'&-" });
+  if (tipo === "modelo") error = errorTexto(nombre, { campo: "El modelo", minLetras: 0, numeros: true, simbolos: "-" });
+  return error || null;
 }
 
 function existeNombreCatalogo(lista, nombre, exceptId = null, extra = () => true) {
@@ -1563,6 +1552,10 @@ async function accionRestaurar(item) {
       const motivo = normalizarTexto(value);
       if (!motivo) {
         Swal.showValidationMessage("Debes indicar el motivo de restauración");
+        return false;
+      }
+      if (motivo.length < 5) {
+        Swal.showValidationMessage("El motivo debe tener al menos 5 caracteres");
         return false;
       }
       return motivo;

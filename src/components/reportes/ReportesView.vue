@@ -60,6 +60,8 @@
                   :id="`inicio-${reporte.id}`"
                   :key="`inicio-${destello}`"
                   v-model="filtros.fechaInicio"
+                  :min="FECHA_MIN_REPORTES"
+                  :max="filtros.fechaFin || hoyISO"
                   type="date"
                   class="filter-control"
                   :class="{ 'filter-control--cambiado': filtros.periodo !== 'mes', 'filter-control--destello': destello > 0 }"
@@ -72,6 +74,8 @@
                   :id="`fin-${reporte.id}`"
                   :key="`fin-${destello}`"
                   v-model="filtros.fechaFin"
+                  :min="filtros.fechaInicio || FECHA_MIN_REPORTES"
+                  :max="hoyISO"
                   type="date"
                   class="filter-control"
                   :class="{ 'filter-control--cambiado': filtros.periodo !== 'mes', 'filter-control--destello': destello > 0 }"
@@ -188,6 +192,9 @@ const { isDark } = useAppTheme()
 const generando = ref('')
 const STORAGE_KEY_REPORTE_ABIERTO = 'rentacar:reportes:reporte-abierto'
 const reporteAbierto = ref('')
+// el back no acepta fechas antes de esta (REPORTES_FECHA_INICIO)
+const FECHA_MIN_REPORTES = import.meta.env.VITE_REPORTES_FECHA_INICIO || '2026-01-01'
+const hoyISO = computed(() => fechaISO(new Date()))
 const destello = ref(0)
 
 const filtros = reactive({
@@ -327,15 +334,19 @@ function toggleReporte(id) {
   localStorage.setItem(STORAGE_KEY_REPORTE_ABIERTO, reporteAbierto.value)
 }
 
+function limitarInicio(iso) {
+  return iso < FECHA_MIN_REPORTES ? FECHA_MIN_REPORTES : iso
+}
+
 function rangoPeriodo(valor) {
   const hoy = new Date()
-  if (valor === 'mes') return { inicio: fechaISO(new Date(hoy.getFullYear(), hoy.getMonth(), 1)), fin: fechaISO(hoy) }
+  if (valor === 'mes') return { inicio: limitarInicio(fechaISO(new Date(hoy.getFullYear(), hoy.getMonth(), 1))), fin: fechaISO(hoy) }
   if (valor === 'trimestral') {
     const inicio = new Date(hoy)
     inicio.setMonth(hoy.getMonth() - 3)
-    return { inicio: fechaISO(inicio), fin: fechaISO(hoy) }
+    return { inicio: limitarInicio(fechaISO(inicio)), fin: fechaISO(hoy) }
   }
-  if (valor === 'anual') return { inicio: fechaISO(new Date(hoy.getFullYear(), 0, 1)), fin: fechaISO(hoy) }
+  if (valor === 'anual') return { inicio: limitarInicio(fechaISO(new Date(hoy.getFullYear(), 0, 1))), fin: fechaISO(hoy) }
   return null
 }
 
@@ -411,6 +422,14 @@ async function generarReporte(reporte, modo = 'abrir') {
 function validarReporte(reporte) {
   if (reporte.needsPeriod && (!filtros.fechaInicio || !filtros.fechaFin)) {
     return 'Selecciona la fecha de inicio y la fecha fin.'
+  }
+
+  if (reporte.needsPeriod && filtros.fechaInicio < FECHA_MIN_REPORTES) {
+    return `La fecha de inicio no puede ser anterior al ${fechaCorta(FECHA_MIN_REPORTES)}, desde cuando hay registros en el sistema.`
+  }
+
+  if (reporte.needsPeriod && filtros.fechaFin > hoyISO.value) {
+    return 'La fecha fin no puede ser en el futuro.'
   }
 
   if (reporte.needsPeriod && filtros.fechaFin < filtros.fechaInicio) {

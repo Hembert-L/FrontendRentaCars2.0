@@ -324,6 +324,7 @@ import { storeToRefs } from 'pinia'
 import { useVehiculosStore } from '@/stores/vehiculos'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { labelEstadoVehiculo } from '@/utils/vehiculoFormatters'
+import { errorPlaca, errorTexto } from '@/utils/validacionesTexto'
 
 const props = defineProps({
   visible: Boolean,
@@ -355,7 +356,8 @@ const coloresRapidos = [
 ]
 
 const ANIO_MIN = 1980
-const ANIO_MAX = 2050
+// el back deja hasta el año que viene
+const ANIO_MAX = new Date().getFullYear() + 1
 const loading = ref(false)
 const globalError = ref('')
 const marcaId = ref('')
@@ -493,7 +495,12 @@ function validarPaso1() {
   const pasajeros = Number(form.capacidad_pasajeros)
   if (!placa) { errors.placa = 'La placa es obligatoria.'; ok = false }
   else if (placa.length > 20) { errors.placa = 'La placa no puede tener más de 20 caracteres.'; ok = false }
+  else if (errorPlaca(placa)) { errors.placa = errorPlaca(placa); ok = false }
   if (!form.color.trim()) { errors.color = 'Requerido'; ok = false }
+  else if (errorTexto(form.color, { campo: 'El color', minLetras: 3 })) {
+    errors.color = errorTexto(form.color, { campo: 'El color', minLetras: 3 })
+    ok = false
+  }
   if (!form.anio || !Number.isInteger(anio) || anio < ANIO_MIN || anio > ANIO_MAX) {
     errors.anio = `El año debe ser un número entero entre ${ANIO_MIN} y ${ANIO_MAX}.`
     ok = false

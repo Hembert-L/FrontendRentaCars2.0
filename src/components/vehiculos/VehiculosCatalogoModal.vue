@@ -109,6 +109,7 @@ import TelefonoPaisInput from '@/components/common/TelefonoPaisInput.vue'
 import api from '@/services/api'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { fetchAllPaginated } from '@/utils/apiPagination'
+import { errorNombrePersona, errorTexto } from '@/utils/validacionesTexto'
 import {
   CODIGO_PAIS_DEFAULT,
   buscarPaisTelefono,
@@ -136,11 +137,15 @@ const modelosExistentes = ref([])
 const propietariosExistentes = ref([])
 const form = reactive({ nombre: '', precio_dia: '', marca_id: '', capacidad_maxima: '', telefono: '', pais_telefono: CODIGO_PAIS_DEFAULT, tipo_propietario: '' })
 const errors = reactive({ nombre: '', precio_dia: '', marca_id: '', capacidad_maxima: '', telefono: '', tipo_propietario: '' })
-const nombreFlexibleRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 ./'-]+$/
-const nombrePersonaRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ '-]+$/
-const contieneLetraRegex = /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/
-const nombreCategoriaRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ '-]*$/
-const nombreMarcaRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ .'&-]*$/
+
+// mismas reglas de nombre que el back para cada catalogo
+function errorNombreCatalogo(tipo, nombre) {
+  if (tipo === 'propietario') return errorNombrePersona(nombre, { palabrasMinimas: 1 })
+  if (tipo === 'categoria') return errorTexto(nombre, { campo: 'La categoría', minLetras: 3, simbolos: '-' })
+  if (tipo === 'marca') return errorTexto(nombre, { campo: 'La marca', minLetras: 2, simbolos: ".'&-" })
+  if (tipo === 'modelo') return errorTexto(nombre, { campo: 'El modelo', minLetras: 0, numeros: true, simbolos: '-' })
+  return ''
+}
 
 const tiposPropietario = [
   { value: 'PROPIO', label: 'Propio' },
@@ -301,20 +306,8 @@ function validar() {
   } else if (nombre.length > nombreMax.value) {
     errors.nombre = `El nombre no puede tener más de ${nombreMax.value} caracteres.`
     ok = false
-  } else if (props.tipo === 'propietario' && !nombrePersonaRegex.test(nombre)) {
-    errors.nombre = 'El nombre solo debe contener letras y signos básicos.'
-    ok = false
-  } else if (props.tipo === 'categoria' && !nombreCategoriaRegex.test(nombre)) {
-    errors.nombre = 'La categoría solo puede llevar letras y espacios.'
-    ok = false
-  } else if (props.tipo === 'marca' && !nombreMarcaRegex.test(nombre)) {
-    errors.nombre = 'La marca solo puede llevar letras, espacios, punto o guion.'
-    ok = false
-  } else if (props.tipo === 'modelo' && !nombreFlexibleRegex.test(nombre)) {
-    errors.nombre = 'El nombre contiene caracteres no permitidos.'
-    ok = false
-  } else if (props.tipo === 'modelo' && !contieneLetraRegex.test(nombre) && !/\d/.test(nombre)) {
-    errors.nombre = 'El nombre del modelo no es válido.'
+  } else if (errorNombreCatalogo(props.tipo, nombre)) {
+    errors.nombre = errorNombreCatalogo(props.tipo, nombre)
     ok = false
   } else if (props.tipo === 'marca' && existeNombre(marcas.value, nombre)) {
     errors.nombre = 'Ya existe una marca registrada con ese nombre.'
