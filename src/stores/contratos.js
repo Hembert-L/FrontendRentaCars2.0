@@ -3,13 +3,6 @@ import { ref } from 'vue'
 import api from '@/services/api'
 import { fetchAllPaginated } from '@/utils/apiPagination'
 
-// hora local, con toISOString se guardaba 6 horas adelantada
-function fechaHoraLocal() {
-  const d = new Date()
-  const p = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
-}
-
 export const useContratosStore = defineStore('contratos', () => {
   const contratos = ref([])
   const loading   = ref(false)
@@ -117,7 +110,6 @@ export const useContratosStore = defineStore('contratos', () => {
       tipo_cargo: cargo.tipo_cargo || 'OTRO',
       descripcion: cargo.concepto || cargo.descripcion || null,
       monto: Number(cargo.monto || 0),
-      fecha_registro: fechaHoraLocal(),
     })), alConfirmar)
   }
 

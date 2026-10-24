@@ -29,7 +29,6 @@
         >
           <option value="">Todos los estados</option>
           <option value="ACTIVO">Activo</option>
-          <option value="INACTIVO">Inactivo</option>
           <option value="BLOQUEADO">Bloqueado</option>
         </select>
         <button
@@ -105,7 +104,6 @@
                   title="Cambiar estado"
                 >
                   <option value="ACTIVO">Activo</option>
-                  <option value="INACTIVO">Inactivo</option>
                   <option value="BLOQUEADO">Bloqueado</option>
                 </select>
                 <span

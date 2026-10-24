@@ -115,7 +115,7 @@ export function reservaChocaConContratoDirecto(fechaEntrega, fechaDevolucion, re
 }
 
 export function labelEstadoContrato(e) {
-  const m = { PENDIENTE: 'Pendiente', ACTIVO: 'Activo', VENCIDO: 'Vencido', FINALIZADO: 'Finalizado', ANULADO: 'Anulado' }
+  const m = { PENDIENTE: 'Pendiente', ACTIVO: 'Activo', FINALIZADO: 'Finalizado', ANULADO: 'Anulado' }
   return m[e] || e
 }
 
@@ -146,7 +146,6 @@ export function badgeEstadoContrato(estado, isDark = false) {
     const m = {
       PENDIENTE: 'bg-gray-800 text-gray-300 border-gray-700',
       ACTIVO: 'bg-red-950/60 text-red-300 border-red-900/60',
-      VENCIDO: 'bg-amber-950/60 text-amber-300 border-amber-900/60',
       FINALIZADO: 'bg-green-950/60 text-green-300 border-green-900/60',
       ANULADO: 'bg-gray-800 text-gray-500 border-gray-700',
     }
@@ -155,7 +154,6 @@ export function badgeEstadoContrato(estado, isDark = false) {
   const m = {
     PENDIENTE: 'bg-gray-100 text-gray-700 border-gray-200',
     ACTIVO: 'bg-red-50 text-red-800 border-red-200',
-    VENCIDO: 'bg-amber-50 text-amber-800 border-amber-200',
     FINALIZADO: 'bg-green-50 text-green-800 border-green-200',
     ANULADO: 'bg-gray-100 text-gray-500 border-gray-200',
   }
@@ -210,4 +208,13 @@ export function totalFinalContrato(contrato) {
 export function saldoPendienteContrato(contrato) {
   if (!contrato) return 0
   return centsToMoney(Math.max(0, moneyCents(totalFinalContrato(contrato)) - moneyCents(montoPagadoContrato(contrato))))
+}
+
+// mismas reglas que el back: no negativo, max 2 decimales y no mas que el subtotal
+export function errorDescuentoContrato(descuento, subtotal) {
+  const n = Number(descuento || 0)
+  if (!Number.isFinite(n) || n < 0) return 'El descuento no puede ser negativo.'
+  if (!/^\d+(\.\d{1,2})?$/.test(String(n))) return 'Usa máximo dos decimales.'
+  if (n > Number(subtotal || 0)) return `El descuento no puede ser mayor que el subtotal ($${formatPrecio(subtotal)}).`
+  return ''
 }

@@ -61,5 +61,7 @@ export function validarTelefonoPais(value, pais) {
   const local = telefonoLocalNormalizado(value, pais)
   if (!local) return 'El teléfono es obligatorio.'
   if (local.length !== pais.digitos) return `Debe tener ${pais.digitos} dígitos para ${pais.prefijo}.`
+  if (/^(\d)\1+$/.test(local)) return 'Ingresa un número de teléfono real, no una secuencia repetida.'
+  if (pais.codigo === 'SV' && !/^[267]/.test(local)) return 'En El Salvador el número debe empezar con 2 (fijo), 6 o 7 (celular).'
   return ''
 }

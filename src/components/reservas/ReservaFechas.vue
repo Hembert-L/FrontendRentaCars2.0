@@ -12,11 +12,11 @@
       <div>
         <label class="text-xs font-semibold mb-1 block" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Fecha de inicio</label>
         <div class="relative">
-          <i class="pi pi-calendar input-icon"></i>
           <input
             :value="fechaInicio"
             type="date"
             :min="minFechaInicio || hoy"
+            :max="fechaMaxima"
             class="field-input"
             :class="errorInicio ? 'error' : ''"
             @input="$emit('update:fechaInicio', $event.target.value); $emit('update:tipoReserva', 'ANTISIPADA'); $emit('change')"
@@ -27,11 +27,11 @@
       <div>
         <label class="text-xs font-semibold mb-1 block" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Fecha de fin</label>
         <div class="relative">
-          <i class="pi pi-calendar input-icon"></i>
           <input
             :value="fechaFin"
             type="date"
             :min="fechaInicio ? sumarUnDia(fechaInicio) : minFechaInicio || hoy"
+            :max="fechaMaxima"
             class="field-input"
             :class="errorFin ? 'error' : ''"
             @input="$emit('update:fechaFin', $event.target.value); $emit('change')"
@@ -57,6 +57,9 @@
 <script setup>
 import { useAppTheme } from '@/composables/useAppTheme'
 import { formatFecha, sumarDiasISO } from '@/utils/reservaFormatters'
+import { fechaMaximaPermitida } from '@/utils/rangoFechas'
+
+const fechaMaxima = fechaMaximaPermitida()
 
 defineProps({
   fechaInicio:  { type: String, default: '' },
@@ -97,5 +100,5 @@ function sumarUnDia(fecha) {
 .form-section-dark .field-input { border:1px solid #4b5563; background:#1f2937; color:#f3f4f6; }
 .form-section-dark .field-input:focus { background:#111827; border-color:#922b21; }
 .form-section-dark .field-input.error { border-color:#f87171; background:#450a0a; }
-.form-section-dark .field-input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.85); }
+.field-input[type="date"] { padding-left:1rem; }
 </style>

@@ -75,7 +75,6 @@
               v-else
               v-model:descuento="descuento"
               v-model:nivel-combustible="nivelCombustible"
-              v-model:observaciones-entrega="observacionesEntrega"
               :dias="dias"
               :precio-dia="precioDia"
             />
@@ -87,6 +86,7 @@
         <p v-if="mensajeReservaTraslapada" class="wizard-error">{{ mensajeReservaTraslapada }}</p>
         <p v-if="mensajeVehiculoReserva" class="wizard-error">{{ mensajeVehiculoReserva }}</p>
         <p v-if="mensajeDiaEntrega" class="wizard-error">{{ mensajeDiaEntrega }}</p>
+        <p v-if="mensajeFechaDevolucion" class="wizard-error">{{ mensajeFechaDevolucion }}</p>
 
         <!-- Navegación -->
         <div class="wizard-nav">
@@ -148,8 +148,9 @@ import ContratoPdfPreview from '@/components/contratos/ContratoPdfPreview.vue'
 import { useContratosStore } from '@/stores/contratos'
 import { useReservasStore } from '@/stores/reservas'
 import { useAppTheme } from '@/composables/useAppTheme'
-import { calcularDias, documentosVigentes, reservaChocaConContratoDirecto } from '@/utils/contratoFormatters'
+import { calcularDias, documentosVigentes, reservaChocaConContratoDirecto, errorDescuentoContrato } from '@/utils/contratoFormatters'
 import { fechaHoyLocal, formatFecha } from '@/utils/reservaFormatters'
+import { pasaFechaMaxima, mensajeFechaMaxima } from '@/utils/rangoFechas'
 import { toastSuccess } from '@/utils/toast'
 
 const router = useRouter()
@@ -179,7 +180,6 @@ const cargandoVehiculos = ref(false)
 const vehiculosConsultados = ref(false)
 const descuento = ref(0)
 const nivelCombustible = ref('1/2')
-const observacionesEntrega = ref('')
 const generando = ref(false)
 const error = ref('')
 const contratoGenerado = ref(null)
@@ -260,6 +260,10 @@ const mensajeVehiculoReserva = computed(() => {
   if (vehiculoSel.value.estado === 'DISPONIBLE') return ''
   return `El vehículo de esta reserva no está disponible (estado actual: ${vehiculoSel.value.estado}). No se puede generar el contrato hasta que vuelva a estar disponible.`
 })
+// en contrato directo la devolución no puede pasar el límite de fechas (31/12 de dentro de dos años)
+const mensajeFechaDevolucion = computed(() =>
+  !esDesdeReserva.value && pasaFechaMaxima(fechaDevolucion.value) ? `Devolución: ${mensajeFechaMaxima()}` : '',
+)
 const precioDia = computed(() => Number(vehiculoSel.value?.categoria?.precio_dia || 0))
 const totalEstimado = computed(() => Math.max(0, dias.value * precioDia.value - descuento.value))
 const docsOk = computed(() => documentosVigentes(cliente.value).ok)
@@ -279,9 +283,11 @@ const paso2Ok = computed(() =>
   precioDia.value > 0 &&
   !reservaTraslapada.value &&
   !mensajeVehiculoReserva.value &&
-  !mensajeDiaEntrega.value,
+  !mensajeDiaEntrega.value &&
+  !mensajeFechaDevolucion.value,
 )
-const puedeGenerar = computed(() => paso1Ok.value && paso2Ok.value && dias.value > 0)
+const descuentoValido = computed(() => !errorDescuentoContrato(descuento.value, dias.value * precioDia.value))
+const puedeGenerar = computed(() => paso1Ok.value && paso2Ok.value && dias.value > 0 && descuentoValido.value)
 
 const pasoMaximo = computed(() => {
   if (paso2Ok.value) return 3
@@ -534,7 +540,6 @@ async function generarContrato() {
       precio_por_dia:            precioDia.value,
       monto_descuento:           descuento.value,
       nivel_combustible_entrega: nivelCombustible.value,
-      observaciones_entrega:     observacionesEntrega.value,
     }
     if (reservaId.value) {
       payload.reserva_id = reservaId.value

@@ -239,6 +239,7 @@ function validar() {
   const e = {}
   if (!form.vehiculo_nuevo_id) e.vehiculo_nuevo_id = 'Debe seleccionar el vehículo de reemplazo.'
   if (!form.motivo.trim()) e.motivo = 'Debe describir el desperfecto del vehículo.'
+  else if (form.motivo.trim().length < 5) e.motivo = 'El motivo debe tener al menos 5 caracteres.'
   if (form.costo !== '' && form.costo !== null) {
     const costo = Number(form.costo)
     if (!Number.isFinite(costo) || costo < 0 || costo > 999999.99) e.costo = 'El costo debe estar entre 0 y 999,999.99.'

@@ -164,7 +164,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { useClientesStore } from '@/stores/clientes'
 import { documentosVigentes } from '@/utils/contratoFormatters'
@@ -215,13 +215,30 @@ function estadoBadge(estado) {
   return map[estado] ?? (isDark.value ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600')
 }
 
+// Igual que en Reserva: sin texto de búsqueda se muestra la primera página de clientes
+async function cargarIniciales() {
+  const id = ++busquedaActiva
+  buscando.value = true
+  try {
+    await clientesStore.fetchClientes({ page: 1 })
+    if (id !== busquedaActiva || terminoBusqueda.value.trim()) return
+    resultados.value = [...clientesStore.clientes]
+  } finally {
+    if (id === busquedaActiva) buscando.value = false
+  }
+}
+
+onMounted(() => {
+  if (!cliente.value) cargarIniciales()
+})
+
 function onBuscar() {
   clearTimeout(timer)
   resultados.value = []
 
   const term = terminoBusqueda.value.trim()
   if (!term) {
-    buscando.value = false
+    timer = setTimeout(cargarIniciales, 350)
     return
   }
 
@@ -256,6 +273,7 @@ function limpiar() {
   resultados.value = []
   buscando.value = false
   emit('cliente-limpiado')
+  cargarIniciales()
 }
 
 defineExpose({ alertaDocs })

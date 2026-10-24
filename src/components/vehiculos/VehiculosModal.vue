@@ -107,12 +107,12 @@
                         v-model="form.capacidad_pasajeros"
                         type="number"
                         min="1"
-                        :max="capacidadMaximaModelo || 255"
+                        :max="PASAJEROS_MAX"
                         class="veh-input"
                         :class="{ 'veh-input--error': errors.capacidad_pasajeros }"
                       />
                       <p v-if="errors.capacidad_pasajeros" class="veh-error">{{ errors.capacidad_pasajeros }}</p>
-                      <p v-else-if="capacidadMaximaModelo" class="veh-hint">Máximo {{ capacidadMaximaModelo }} según el modelo</p>
+                      <p v-else class="veh-hint">El máximo permitido depende de la categoría (paso 2)</p>
                     </div>
                   </div>
 
@@ -186,7 +186,7 @@
                     </p>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <button
-                        v-for="c in categorias"
+                        v-for="c in categoriasCompatibles"
                         :key="c.id"
                         type="button"
                         class="veh-cat-card"
@@ -197,10 +197,19 @@
                           {{ c.nombre }}
                         </span>
                         <span class="text-xs opacity-75">${{ Number(c.precio_dia).toFixed(2) }}/día</span>
+                        <span v-if="c.capacidad_maxima" class="text-xs opacity-75">
+                          Hasta {{ c.capacidad_maxima }} pasajeros
+                        </span>
                       </button>
                     </div>
                     <p v-if="errors.categoria_id" class="veh-error">{{ errors.categoria_id }}</p>
                     <p v-if="!categorias.length" class="text-xs mt-2 opacity-60">No hay categorías. Agrégalas desde el catálogo.</p>
+                    <p v-else-if="!categoriasCompatibles.length" class="veh-error">
+                      Ninguna categoría acepta {{ form.capacidad_pasajeros }} pasajeros. Corrige los pasajeros en el paso 1 o sube el máximo de pasajeros de una categoría en el catálogo.
+                    </p>
+                    <p v-else-if="categoriasCompatibles.length < categorias.length" class="veh-hint">
+                      Solo se muestran las categorías que aceptan {{ form.capacidad_pasajeros }} pasajeros.
+                    </p>
                   </div>
 
                   <div class="veh-field">
@@ -315,6 +324,7 @@ import { storeToRefs } from 'pinia'
 import { useVehiculosStore } from '@/stores/vehiculos'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { labelEstadoVehiculo } from '@/utils/vehiculoFormatters'
+import { errorPlaca, errorTexto } from '@/utils/validacionesTexto'
 
 const props = defineProps({
   visible: Boolean,
@@ -346,7 +356,8 @@ const coloresRapidos = [
 ]
 
 const ANIO_MIN = 1980
-const ANIO_MAX = 2050
+// el back deja hasta el año que viene
+const ANIO_MAX = new Date().getFullYear() + 1
 const loading = ref(false)
 const globalError = ref('')
 const marcaId = ref('')
@@ -360,11 +371,19 @@ const modelosDisponibles = computed(() => {
   return modelosPorMarca.value[String(marcaId.value)] ?? modelos.value
 })
 
-// Capacidad máxima de pasajeros del modelo seleccionado (null si aún no hay modelo)
-const capacidadMaximaModelo = computed(() => {
-  const mod = modelosDisponibles.value.find((m) => m.id == form.modelo_id)
-  return mod?.capacidad_maxima ? Number(mod.capacidad_maxima) : null
-})
+// tope general de pasajeros, el maximo de cada categoria va aparte
+const PASAJEROS_MAX = 15
+
+// La categoría acepta los pasajeros escritos en el paso 1 si no pasan su máximo
+// (si la categoría no trae máximo, no se limita)
+function categoriaAceptaPasajeros(categoria) {
+  const pasajeros = Number(form.capacidad_pasajeros)
+  if (!categoria?.capacidad_maxima || !pasajeros) return true
+  return pasajeros <= Number(categoria.capacidad_maxima)
+}
+
+// solo las categorias que aguantan los pasajeros del paso 1
+const categoriasCompatibles = computed(() => categorias.value.filter(categoriaAceptaPasajeros))
 
 const coloresFormulario = computed(() => {
   const base = coloresRapidos.map((c) => c.nombre)
@@ -453,6 +472,13 @@ function seleccionarCategoria(catId) {
   form.categoria_id = catId
 }
 
+// Si se cambian los pasajeros y la categoría elegida ya no los acepta, se quita la selección
+watch(() => form.capacidad_pasajeros, () => {
+  if (!form.categoria_id) return
+  const actual = categorias.value.find((c) => c.id == form.categoria_id)
+  if (actual && !categoriaAceptaPasajeros(actual)) form.categoria_id = ''
+})
+
 function seleccionarTipoPropietario(tipo) {
   tipoPropietario.value = tipo
   busquedaPropietario.value = ''
@@ -469,16 +495,18 @@ function validarPaso1() {
   const pasajeros = Number(form.capacidad_pasajeros)
   if (!placa) { errors.placa = 'La placa es obligatoria.'; ok = false }
   else if (placa.length > 20) { errors.placa = 'La placa no puede tener más de 20 caracteres.'; ok = false }
+  else if (errorPlaca(placa)) { errors.placa = errorPlaca(placa); ok = false }
   if (!form.color.trim()) { errors.color = 'Requerido'; ok = false }
+  else if (errorTexto(form.color, { campo: 'El color', minLetras: 3 })) {
+    errors.color = errorTexto(form.color, { campo: 'El color', minLetras: 3 })
+    ok = false
+  }
   if (!form.anio || !Number.isInteger(anio) || anio < ANIO_MIN || anio > ANIO_MAX) {
     errors.anio = `El año debe ser un número entero entre ${ANIO_MIN} y ${ANIO_MAX}.`
     ok = false
   }
-  if (!form.capacidad_pasajeros || !Number.isInteger(pasajeros) || pasajeros < 1 || pasajeros > 255) {
-    errors.capacidad_pasajeros = 'La capacidad debe ser un número entero entre 1 y 255.'
-    ok = false
-  } else if (capacidadMaximaModelo.value && pasajeros > capacidadMaximaModelo.value) {
-    errors.capacidad_pasajeros = `Este modelo acepta máximo ${capacidadMaximaModelo.value} pasajeros.`
+  if (!form.capacidad_pasajeros || !Number.isInteger(pasajeros) || pasajeros < 1 || pasajeros > PASAJEROS_MAX) {
+    errors.capacidad_pasajeros = `La capacidad debe ser un número entero entre 1 y ${PASAJEROS_MAX}.`
     ok = false
   }
   if (!marcaId.value) { errors.marca_id = 'Selecciona una marca'; ok = false }
@@ -489,7 +517,12 @@ function validarPaso1() {
 function validarPaso2() {
   errors.categoria_id = errors.propietario_id = errors.observaciones = ''
   let ok = true
+  const categoria = categorias.value.find((c) => c.id == form.categoria_id)
   if (!form.categoria_id) { errors.categoria_id = 'Selecciona una categoría'; ok = false }
+  else if (!categoriaAceptaPasajeros(categoria)) {
+    errors.categoria_id = `La categoría ${categoria.nombre} acepta máximo ${categoria.capacidad_maxima} pasajeros y este vehículo tiene ${form.capacidad_pasajeros}. Elige otra categoría o corrige los pasajeros en el paso 1.`
+    ok = false
+  }
   if (!form.propietario_id) { errors.propietario_id = 'Selecciona un propietario'; ok = false }
   if (form.observaciones && form.observaciones.length > 400) { errors.observaciones = 'Máximo 400 caracteres'; ok = false }
   return ok

@@ -8,8 +8,9 @@
       </div>
     </div>
 
-    <!-- Registrar pago -->
+    <!-- Registrar pago (el contador solo consulta, no registra) -->
     <div
+      v-if="puedeRegistrarPagos"
       class="rounded-2xl border shadow-sm p-4 mb-5 flex flex-col sm:flex-row gap-3 items-stretch sm:items-end"
       :class="isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'"
     >
@@ -251,6 +252,8 @@ import Swal from 'sweetalert2'
 import PagoRegistrarModal from '@/components/pagos/PagoRegistrarModal.vue'
 import { useContratosStore } from '@/stores/contratos'
 import { usePagosStore } from '@/stores/pagos'
+import { useAuthStore } from '@/stores/auth'
+import { puedeHacer } from '@/utils/permisos'
 import { useAppTheme } from '@/composables/useAppTheme'
 import api from '@/services/api'
 import { getToken } from '@/services/authToken'
@@ -262,6 +265,9 @@ const route = useRoute()
 const { isDark } = useAppTheme()
 const contratosStore = useContratosStore()
 const pagosStore = usePagosStore()
+const authStore = useAuthStore()
+// registrar y cancelar pagos: administrador y empleado (POST/DELETE /admin/pagos)
+const puedeRegistrarPagos = computed(() => puedeHacer(authStore.userRoles, 'registrarPago'))
 
 const contratoId = ref('')
 const contratoSel = ref(null)
@@ -421,6 +427,7 @@ function protegerRecarga(event) {
 }
 
 function abrirRegistro() {
+  if (!puedeRegistrarPagos.value) return
   if (operacionesBloqueadas.value || modalAbierto.value || !contratoSel.value || saldoContrato.value <= 0) return
   resumenLote.value = ''
   confirmadosLote.value = 0
@@ -660,6 +667,7 @@ function contratoPago(pago) {
 }
 
 function puedeCancelarPago(pago) {
+  if (!puedeRegistrarPagos.value) return false
   if (pago.estado_transaccion !== 'CONFIRMADO') return false
   const contrato = contratoPago(pago)
   if (contrato?.estado_contrato !== 'FINALIZADO') return true

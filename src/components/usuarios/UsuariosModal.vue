@@ -52,7 +52,7 @@
               <label class="field-label" :class="isDark ? 'text-gray-400' : 'text-gray-600'">Correo electrónico</label>
               <div class="relative">
                 <i class="pi pi-envelope input-icon" :class="isDark ? 'text-gray-500' : 'text-gray-400'"></i>
-                <input v-model="form.correo" type="email"
+                <input v-model="form.correo" type="email" maxlength="150"
                   class="field-input" :class="[errors.correo ? 'error' : '', isDark ? 'field-input-dark' : 'field-input-light']" />
               </div>
               <p v-if="errors.correo" class="field-error">{{ errors.correo }}</p>
@@ -112,6 +112,7 @@
                 <input
                   v-model="form.password"
                   :type="showPassword ? 'text' : 'password'"
+                  maxlength="255"
                   autocomplete="new-password"
                   :placeholder="modoEdicion ? 'Déjala vacía para no cambiarla' : 'Mínimo 8 caracteres'"
                   class="field-input pr-10"
@@ -158,6 +159,7 @@
 import { ref, reactive, watch, computed } from 'vue'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { esAdministrador } from '@/utils/usuario'
+import { errorNombrePersona } from '@/utils/validacionesTexto'
 
 const { isDark } = useAppTheme()
 
@@ -165,6 +167,8 @@ const props = defineProps({
   visible:     Boolean,
   modoEdicion: Boolean,
   usuario:     Object,
+  // { errors, message } que devolvió el backend al guardar; se muestran en el formulario
+  erroresServidor: { type: Object, default: null },
 })
 
 const emit = defineEmits(['guardar', 'cerrar'])
@@ -184,6 +188,16 @@ const form = reactive({
 const errors = reactive({ nombre: '', apellido: '', correo: '', rol: '', password: '' })
 
 const esAdminUsuario = computed(() => props.modoEdicion && esAdministrador(props.usuario))
+
+// Si el backend rechaza el guardado, cada mensaje va debajo de su campo y el primero arriba de los botones
+watch(() => props.erroresServidor, (resp) => {
+  if (!resp) return
+  const errs = resp.errors || {}
+  Object.keys(errors).forEach((k) => {
+    errors[k] = Array.isArray(errs[k]) ? errs[k][0] : (errs[k] || '')
+  })
+  globalError.value = Object.values(errs).flat().find(Boolean) || resp.message || 'No se pudo guardar el usuario.'
+})
 
 watch(() => props.visible, (val) => {
   if (!val) return
@@ -208,26 +222,27 @@ watch(() => props.visible, (val) => {
 // solo letras, espacios, apostrofo y guion (igual que el back)
 const SOLO_LETRAS = /^\p{L}[\p{L}\s'-]*$/u
 
-function errorNombre(valor, max = 100) {
+function errorNombre(valor, max = 100, campo = 'nombre') {
   const texto = (valor || '').trim()
   if (!texto) return 'Requerido'
   if (/\d/.test(texto)) return 'No puede llevar números'
   if (!SOLO_LETRAS.test(texto)) return 'Solo letras y espacios'
   if (texto.length < 2) return 'Mínimo 2 letras'
   if (texto.length > max) return `Máximo ${max} caracteres`
-  return ''
+  return errorNombrePersona(texto, { palabrasMinimas: 1, campo })
 }
 
 function validar() {
   Object.keys(errors).forEach(k => errors[k] = '')
   let ok = true
   errors.nombre = errorNombre(form.nombre, 15)
-  errors.apellido = errorNombre(form.apellido)
+  errors.apellido = errorNombre(form.apellido, 100, 'apellido')
   if (errors.nombre || errors.apellido) ok = false
   if (!form.correo || !/\S+@\S+\.\S+/.test(form.correo)) { errors.correo = 'Correo inválido'; ok = false }
   if (!esAdminUsuario.value && !form.rol) { errors.rol = 'Selecciona un rol'; ok = false }
   const cambiaPassword = !props.modoEdicion || form.password.length > 0
   if (cambiaPassword && form.password.length < 8) { errors.password = 'Mínimo 8 caracteres'; ok = false }
+  else if (cambiaPassword && (!/[A-Za-z]/.test(form.password) || !/\d/.test(form.password))) { errors.password = 'Debe llevar al menos una letra y un número'; ok = false }
   return ok
 }
 

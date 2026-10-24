@@ -46,17 +46,6 @@
               {{ contrato.observaciones_entrega || "Sin observaciones registradas en la entrega." }}
             </div>
           </div>
-          <div class="cierre-field">
-            <label>Estado y observaciones al recibir</label>
-            <textarea
-              v-model="observacionesRecepcion"
-              :disabled="operacionEnCurso"
-              rows="3"
-              maxlength="500"
-              class="cierre-input"
-              placeholder="Rayones, golpes, limpieza u otros detalles..."
-            ></textarea>
-          </div>
         </section>
 
         <div class="cierre-grid-2">
@@ -113,6 +102,10 @@
                 + Cargo $10
               </button>
             </div>
+            <label class="cierre-check mt-3">
+              <input v-model="recibidoConDanios" :disabled="operacionEnCurso" type="checkbox" />
+              <span>Se recibe con daños (el vehículo queda en proceso)</span>
+            </label>
           </section>
 
           <section class="cierre-card">
@@ -505,12 +498,12 @@ const operacionEnCurso = computed(() =>
 );
 const salidaConfirmada = ref(false);
 const nivelRecepcion = ref("1/2");
+const recibidoConDanios = ref(false);
 const cargos = ref([]);
 const cargosRegistrados = ref([]);
 const incidencias = ref([]);
 const incidenciasRegistradas = ref([]);
 const aplicarCargoRetraso = ref(true);
-const observacionesRecepcion = ref("");
 // misma tarifa que usa el back
 const TARIFA_RETRASO_HORA = 5;
 const cerrarConDeuda = ref(false);
@@ -616,6 +609,7 @@ const mensajeBloqueoCierre = computed(() => {
     return "Hay incidencias pendientes de guardar antes del cierre.";
   if (cerrarConDeuda.value) {
     if (!motivoCierreDeuda.value) return "Escribe el motivo para cerrar con deuda pendiente.";
+    if (motivoCierreDeuda.value.length < 5) return "El motivo debe tener al menos 5 caracteres.";
     return "";
   }
   if (saldoActual.value > 0 || contrato.value.estado_pago !== "PAGADO")
@@ -835,7 +829,7 @@ async function registrarColeccion(tipo, { mostrarExito = false, desdeCobro = fal
       title: esCargo ? "Completa los cargos" : "Completa las incidencias",
       text: esCargo
         ? "Cada cargo debe tener tipo, concepto y un monto mayor a cero (máximo 2 decimales y hasta $999,999.99)."
-        : "Cada incidencia debe tener tipo, responsable, descripción y un costo válido (máximo 2 decimales y hasta $999,999.99).",
+        : "Cada incidencia debe tener tipo, responsable, descripción y un costo válido (máximo 2 decimales y hasta $999,999.99). Si el responsable es el cliente, el costo debe ser mayor a cero.",
       confirmButtonColor: "#922b21",
     });
     return false;
@@ -888,7 +882,8 @@ async function guardarCargosPendientes() {
 
 function incidenciasIncompletas() {
   return incidencias.value.some(
-    (i) => !i.tipo_incidencia || !i.responsable_tipo || !i.descripcion || !montoValido(i.costo || 0, { permitirCero: true }),
+    (i) => !i.tipo_incidencia || !i.responsable_tipo || !i.descripcion || !montoValido(i.costo || 0, { permitirCero: true })
+      || (i.responsable_tipo === "CLIENTE" && Number(i.costo || 0) <= 0),
   );
 }
 
@@ -1185,8 +1180,7 @@ async function cerrarRenta() {
     const payload = {
       fecha_hora_recepcion: fechaHoraActualApi(),
       nivel_combustible_recepcion: nivelRecepcion.value,
-      estado_vehiculo_recepcion: "RECIBIDO",
-      observaciones: observacionesRecepcion.value.trim() || null,
+      estado_vehiculo_recepcion: recibidoConDanios.value ? "RECIBIDO CON DAÑOS" : "RECIBIDO",
       aplicar_cargo_retraso: aplicaRetrasoAlCerrar.value,
     };
     if (conDeuda) {

@@ -151,6 +151,7 @@
                   :class="inputClass(errors.cobertura)"
                   :disabled="loading"
                   placeholder="Descripción de la cobertura"
+                  maxlength="1000"
                 ></textarea>
                 <p v-if="errors.cobertura" class="seguro-error">
                   <i class="pi pi-info-circle"></i>{{ errors.cobertura }}
@@ -260,6 +261,7 @@
 import { computed, reactive, ref, watch } from "vue";
 import { useAppTheme } from "@/composables/useAppTheme";
 import { nombreVehiculo } from "@/utils/vehiculoFormatters";
+import { errorTexto } from "@/utils/validacionesTexto";
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -359,15 +361,30 @@ function validar() {
     errors.aseguradora = "El nombre de la aseguradora es obligatorio.";
   if (String(form.aseguradora).length > 150)
     errors.aseguradora = "El nombre de la aseguradora no debe exceder los 150 caracteres.";
+  else if (String(form.aseguradora).trim() && errorTexto(form.aseguradora, { campo: "La aseguradora", minLetras: 3, simbolos: ".&-" }))
+    errors.aseguradora = errorTexto(form.aseguradora, { campo: "La aseguradora", minLetras: 3, simbolos: ".&-" });
   if (!String(form.numero_poliza).trim())
     errors.numero_poliza = "El número de póliza es obligatorio.";
   if (String(form.numero_poliza).length > 50)
     errors.numero_poliza = "El número de póliza no debe exceder los 50 caracteres.";
+  else if (String(form.numero_poliza).trim() && !/^[A-Za-z0-9][A-Za-z0-9-]{2,48}[A-Za-z0-9]$/.test(String(form.numero_poliza).trim()))
+    errors.numero_poliza = "La póliza lleva letras, números o guion, mínimo 4 caracteres y sin guion al inicio o al final.";
+  else if (/^(.)\1+$/.test(String(form.numero_poliza).trim()))
+    errors.numero_poliza = "El número de póliza no puede ser el mismo carácter repetido.";
   if (!inicio) errors.fecha_inicio = "La fecha de inicio de la póliza es obligatoria.";
   if (!vencimiento) errors.fecha_vencimiento = "La fecha de vencimiento es obligatoria.";
   if (inicio && vencimiento && vencimiento <= inicio)
     errors.fecha_vencimiento = "La fecha de vencimiento debe ser posterior a la fecha de inicio.";
+  else if (props.mode === "create" && vencimiento && vencimiento <= fechaHoyLocal())
+    errors.fecha_vencimiento = "No se puede registrar un seguro que ya está vencido.";
+  if (String(form.cobertura || "").length > 1000)
+    errors.cobertura = "La cobertura no debe exceder los 1000 caracteres.";
   return !Object.keys(errors).length;
+}
+
+function fechaHoyLocal() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function guardar() {

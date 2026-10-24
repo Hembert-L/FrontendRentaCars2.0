@@ -283,6 +283,7 @@ import ContratoPdfPreview from '@/components/contratos/ContratoPdfPreview.vue'
 import ContratoCambiarVehiculoModal from '@/components/contratos/ContratoCambiarVehiculoModal.vue'
 import { useContratosStore } from '@/stores/contratos'
 import { useAuthStore } from '@/stores/auth'
+import { puedeHacer } from '@/utils/permisos'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { toastSuccess } from '@/utils/toast'
 import {
@@ -504,7 +505,10 @@ async function anularContrato(c) {
     input: 'textarea',
     inputPlaceholder: 'Motivo de la anulación',
     inputAttributes: { maxlength: 500 },
-    inputValidator: (v) => (!v || !v.trim() ? 'Debe indicar el motivo de la anulación.' : undefined),
+    inputValidator: (v) => {
+      if (!v || !v.trim()) return 'Debe indicar el motivo de la anulación.'
+      if (v.trim().length < 5) return 'El motivo debe tener al menos 5 caracteres.'
+    },
     showCancelButton: true,
     confirmButtonText: 'Anular contrato',
     cancelButtonText: 'Volver',
@@ -535,6 +539,7 @@ async function anularContrato(c) {
 const menuAcciones = ref(null)
 
 function puedeRegistrarPago(c) {
+  if (!puedeHacer(authStore.userRoles, 'registrarPago')) return false
   return c.estado_pago !== 'PAGADO' && c.estado_contrato !== 'ANULADO'
 }
 

@@ -52,16 +52,16 @@
               <p v-if="errors.nombre" class="field-error">{{ errors.nombre }}</p>
             </div>
 
-            <div v-if="tipo === 'modelo'">
-              <label class="field-label">Máximo de pasajeros</label>
-              <input v-model="form.capacidad_maxima" type="number" min="1" max="15" step="1" class="field-input" :class="inputClass(errors.capacidad_maxima)" placeholder="5" />
-              <p v-if="errors.capacidad_maxima" class="field-error">{{ errors.capacidad_maxima }}</p>
-            </div>
-
             <div v-if="tipo === 'categoria'">
               <label class="field-label">Precio por día ($)</label>
               <input v-model="form.precio_dia" type="number" min="1" step="0.01" class="field-input" :class="inputClass(errors.precio_dia)" placeholder="25.00" />
               <p v-if="errors.precio_dia" class="field-error">{{ errors.precio_dia }}</p>
+            </div>
+
+            <div v-if="tipo === 'categoria'">
+              <label class="field-label">Máximo de pasajeros</label>
+              <input v-model="form.capacidad_maxima" type="number" min="1" max="15" step="1" class="field-input" :class="inputClass(errors.capacidad_maxima)" placeholder="5" />
+              <p v-if="errors.capacidad_maxima" class="field-error">{{ errors.capacidad_maxima }}</p>
             </div>
 
             <div v-if="tipo === 'propietario'">
@@ -109,6 +109,7 @@ import TelefonoPaisInput from '@/components/common/TelefonoPaisInput.vue'
 import api from '@/services/api'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { fetchAllPaginated } from '@/utils/apiPagination'
+import { errorNombrePersona, errorTexto } from '@/utils/validacionesTexto'
 import {
   CODIGO_PAIS_DEFAULT,
   buscarPaisTelefono,
@@ -136,9 +137,15 @@ const modelosExistentes = ref([])
 const propietariosExistentes = ref([])
 const form = reactive({ nombre: '', precio_dia: '', marca_id: '', capacidad_maxima: '', telefono: '', pais_telefono: CODIGO_PAIS_DEFAULT, tipo_propietario: '' })
 const errors = reactive({ nombre: '', precio_dia: '', marca_id: '', capacidad_maxima: '', telefono: '', tipo_propietario: '' })
-const nombreFlexibleRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 ./'-]+$/
-const nombrePersonaRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ '-]+$/
-const contieneLetraRegex = /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/
+
+// mismas reglas de nombre que el back para cada catalogo
+function errorNombreCatalogo(tipo, nombre) {
+  if (tipo === 'propietario') return errorNombrePersona(nombre, { palabrasMinimas: 1 })
+  if (tipo === 'categoria') return errorTexto(nombre, { campo: 'La categoría', minLetras: 3, simbolos: '-' })
+  if (tipo === 'marca') return errorTexto(nombre, { campo: 'La marca', minLetras: 2, simbolos: ".'&-" })
+  if (tipo === 'modelo') return errorTexto(nombre, { campo: 'El modelo', minLetras: 0, numeros: true, simbolos: '-' })
+  return ''
+}
 
 const tiposPropietario = [
   { value: 'PROPIO', label: 'Propio' },
@@ -195,7 +202,8 @@ const subtituloModal = computed(() =>
 )
 const iconWrapStyle = computed(() => ({ background: config.value.bg }))
 const hasFieldErrors = computed(() => Object.values(errors).some(Boolean))
-const nombreMax = computed(() => props.tipo === 'marca' || props.tipo === 'categoria' ? 80 : 100)
+// largo maximo segun la base de datos: marcas, categorias y modelos 50; propietarios 100
+const nombreMax = computed(() => (props.tipo === 'propietario' ? 100 : 50))
 const hayPropietarioPropio = computed(() =>
   propietariosExistentes.value.some((p) =>
     String(p.tipo_propietario || '').toUpperCase() === 'PROPIO'
@@ -298,14 +306,8 @@ function validar() {
   } else if (nombre.length > nombreMax.value) {
     errors.nombre = `El nombre no puede tener más de ${nombreMax.value} caracteres.`
     ok = false
-  } else if (props.tipo === 'propietario' && !nombrePersonaRegex.test(nombre)) {
-    errors.nombre = 'El nombre solo debe contener letras y signos básicos.'
-    ok = false
-  } else if (props.tipo !== 'propietario' && !nombreFlexibleRegex.test(nombre)) {
-    errors.nombre = 'El nombre contiene caracteres no permitidos.'
-    ok = false
-  } else if (props.tipo === 'categoria' && !contieneLetraRegex.test(nombre)) {
-    errors.nombre = 'La categoría debe incluir al menos una letra.'
+  } else if (errorNombreCatalogo(props.tipo, nombre)) {
+    errors.nombre = errorNombreCatalogo(props.tipo, nombre)
     ok = false
   } else if (props.tipo === 'marca' && existeNombre(marcas.value, nombre)) {
     errors.nombre = 'Ya existe una marca registrada con ese nombre.'
@@ -323,6 +325,14 @@ function validar() {
     } else if (tieneMasDeDosDecimales) {
       errors.precio_dia = 'Usa máximo dos decimales.'
       ok = false
+    } else if (categoriasExistentes.value.some((c) => Number(c.precio_dia) === precio)) {
+      errors.precio_dia = 'Ya existe una categoría con ese precio por día.'
+      ok = false
+    }
+    const maximo = Number(form.capacidad_maxima)
+    if (!form.capacidad_maxima || !Number.isInteger(maximo) || maximo < 1 || maximo > 15) {
+      errors.capacidad_maxima = 'Indica un número entero de pasajeros entre 1 y 15.'
+      ok = false
     }
   }
   if (props.tipo === 'modelo' && !form.marca_id) {
@@ -335,13 +345,6 @@ function validar() {
   )) {
     errors.nombre = 'Ya existe un modelo con ese nombre para la marca seleccionada.'
     ok = false
-  }
-  if (props.tipo === 'modelo') {
-    const capacidad = Number(form.capacidad_maxima)
-    if (!form.capacidad_maxima || !Number.isInteger(capacidad) || capacidad < 1 || capacidad > 15) {
-      errors.capacidad_maxima = 'Indica un número entero de pasajeros entre 1 y 15.'
-      ok = false
-    }
   }
   if (props.tipo === 'propietario') {
     const pais = buscarPaisTelefono(form.pais_telefono)
@@ -378,9 +381,13 @@ async function handleGuardar() {
     if (props.tipo === 'marca') {
       res = await api.post('/admin/marcas', { nombre })
     } else if (props.tipo === 'categoria') {
-      res = await api.post('/admin/categorias', { nombre, precio_dia: Number(form.precio_dia) })
+      res = await api.post('/admin/categorias', {
+        nombre,
+        precio_dia: Number(form.precio_dia),
+        capacidad_maxima: Number(form.capacidad_maxima),
+      })
     } else if (props.tipo === 'modelo') {
-      res = await api.post('/admin/modelos', { nombre, marca_id: Number(form.marca_id), capacidad_maxima: Number(form.capacidad_maxima) })
+      res = await api.post('/admin/modelos', { nombre, marca_id: Number(form.marca_id) })
     } else if (props.tipo === 'propietario') {
       const payload = {
         nombre,
