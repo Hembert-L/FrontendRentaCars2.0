@@ -477,13 +477,11 @@ const pctOcupados = computed(() => {
 // ── estados MAYÚSCULAS ──
 const colorMap = {
   DISPONIBLE: "#22c55e",
-  RESERVADO: "#f0a500",
   RENTADO: "#3b82f6",
   MANTENIMIENTO: "#ef4444",
 };
 const labelMap = {
   DISPONIBLE: "Disponible",
-  RESERVADO: "Reservado",
   RENTADO: "Rentado",
   MANTENIMIENTO: "Mantenimiento",
 };

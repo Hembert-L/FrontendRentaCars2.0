@@ -505,10 +505,10 @@
                         ? 'border-red-800 bg-red-950/40 text-red-300 hover:bg-red-950/70 hover:border-red-700'
                         : 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100'
                     "
-                    :disabled="vehiculoEnUso(item)"
+                    :disabled="bajaVehiculoBloqueada(item)"
                     :title="
                       activeTab === 'vehiculos'
-                        ? (vehiculoEnUso(item)
+                        ? (bajaVehiculoBloqueada(item)
                             ? 'No se puede enviar fuera de servicio mientras está ' + labelEstadoTabla(item.estado).toLowerCase()
                             : 'Enviar fuera de servicio')
                         : `Eliminar ${tabActiva.label.slice(0, -1).toLowerCase()}`
@@ -696,6 +696,7 @@ import {
   ESTADOS_VEHICULO_TODOS,
 } from "@/utils/vehiculoFormatters";
 import { toastSuccess } from "@/utils/toast";
+import { errorNombrePersona, errorTexto } from "@/utils/validacionesTexto";
 
 const { isDark } = useAppTheme();
 const store = useVehiculosStore();
@@ -734,16 +735,11 @@ const seguroMensaje = ref("");
 const estadosFiltro = ESTADOS_VEHICULO_TODOS;
 const ordenEstadosVehiculo = {
   DISPONIBLE: 1,
-  RESERVADO: 2,
   RENTADO: 2.5,
   "EN PROCESO": 2.75,
   MANTENIMIENTO: 3,
   "FUERA DE SERVICIO": 4,
 };
-const nombreFlexibleRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 ./'-]+$/;
-const nombrePersonaRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ '-]+$/;
-const nombreCategoriaRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ '-]*$/;
-const nombreMarcaRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ .'&-]*$/;
 const vehiculos = computed(() => store.vehiculos);
 const pagination = computed(() => store.pagination);
 const puedeRetroceder = computed(() => pagination.value.current_page > 1);
@@ -1147,19 +1143,12 @@ function validarNombreCatalogo(value, tipo, max = 80) {
   if (!nombre) return "El nombre es obligatorio";
   if (nombre.length < 2) return "El nombre debe tener al menos 2 caracteres";
   if (nombre.length > max) return `El nombre no puede tener más de ${max} caracteres`;
-  if (tipo === "propietario" && !nombrePersonaRegex.test(nombre)) {
-    return "El nombre solo debe contener letras y signos básicos";
-  }
-  if (tipo === "categoria" && !nombreCategoriaRegex.test(nombre)) {
-    return "La categoría solo puede llevar letras y espacios";
-  }
-  if (tipo === "marca" && !nombreMarcaRegex.test(nombre)) {
-    return "La marca solo puede llevar letras, espacios, punto o guion";
-  }
-  if (tipo === "modelo" && !nombreFlexibleRegex.test(nombre)) {
-    return "El nombre contiene caracteres no permitidos";
-  }
-  return null;
+  let error = "";
+  if (tipo === "propietario") error = errorNombrePersona(nombre, { palabrasMinimas: 1 });
+  if (tipo === "categoria") error = errorTexto(nombre, { campo: "La categoría", minLetras: 3, simbolos: "-" });
+  if (tipo === "marca") error = errorTexto(nombre, { campo: "La marca", minLetras: 2, simbolos: ".'&-" });
+  if (tipo === "modelo") error = errorTexto(nombre, { campo: "El modelo", minLetras: 0, numeros: true, simbolos: "-" });
+  return error || null;
 }
 
 function existeNombreCatalogo(lista, nombre, exceptId = null, extra = () => true) {
@@ -1175,6 +1164,7 @@ function validarPrecioDia(value) {
   const precio = Number(texto);
   if (!texto || Number.isNaN(precio) || precio < 1) return "El precio debe ser de $1.00 o más";
   if (!/^\d+(\.\d{1,2})?$/.test(texto)) return "Usa máximo dos decimales";
+  if (precio > 9999.99) return "El precio por día no puede ser mayor a $9,999.99";
   return null;
 }
 
@@ -1257,6 +1247,10 @@ function vehiculoFueraServicio(item) {
 const ESTADOS_VEHICULO_EN_USO = ["RENTADO"];
 function vehiculoEnUso(item) {
   return activeTab.value === "vehiculos" && ESTADOS_VEHICULO_EN_USO.includes(item?.estado);
+}
+
+function bajaVehiculoBloqueada(item) {
+  return vehiculoEnUso(item) || (activeTab.value === "vehiculos" && item?.estado === "MANTENIMIENTO");
 }
 
 function nombreSeguroVehiculo(seguro) {
@@ -1425,7 +1419,7 @@ async function accionEditar(item) {
         title: "Editar categoría",
         html: `
         <input id="swal-cat-nombre" class="swal2-input" placeholder="Nombre" value="${item.nombre ?? ""}">
-        <input id="swal-cat-precio" type="number" min="1" step="0.01" class="swal2-input" placeholder="Precio por día" value="${item.precio_dia ?? ""}">
+        <input id="swal-cat-precio" type="number" min="1" max="9999.99" step="0.01" class="swal2-input" placeholder="Precio por día" value="${item.precio_dia ?? ""}">
         <input id="swal-cat-max" type="number" min="1" max="15" step="1" class="swal2-input" placeholder="Máximo de pasajeros" value="${item.capacidad_maxima ?? ""}">
       `,
         showCancelButton: true,
@@ -1565,6 +1559,10 @@ async function accionRestaurar(item) {
         Swal.showValidationMessage("Debes indicar el motivo de restauración");
         return false;
       }
+      if (motivo.length < 5) {
+        Swal.showValidationMessage("El motivo debe tener al menos 5 caracteres");
+        return false;
+      }
       return motivo;
     },
   });
@@ -1588,7 +1586,7 @@ async function accionRestaurar(item) {
 }
 async function accionEliminar(item) {
   if (!puedeEscribirTab.value || !["vehiculos", "marcas", "categorias", "propietarios"].includes(activeTab.value)) return;
-  if (activeTab.value === "vehiculos" && vehiculoEnUso(item)) {
+  if (bajaVehiculoBloqueada(item)) {
     await Swal.fire({
       icon: "info",
       title: "No se puede enviar fuera de servicio",

@@ -112,7 +112,6 @@ export function labelEstadoContrato(estado) {
   const map = {
     PENDIENTE: 'Pendiente',
     ACTIVO: 'Activo',
-    VENCIDO: 'Vencido',
     FINALIZADO: 'Finalizado',
     ANULADO: 'Anulado',
   }
@@ -140,14 +139,12 @@ export function estadoContratoStyle(estado, isDark = false) {
   const light = {
     PENDIENTE: 'background:#fef3c7;color:#92400e;',
     ACTIVO: 'background:#dcfce7;color:#166534;',
-    VENCIDO: 'background:#ffedd5;color:#c2410c;',
     FINALIZADO: 'background:#dbeafe;color:#1d4ed8;',
     ANULADO: 'background:#fee2e2;color:#991b1b;',
   }
   const dark = {
     PENDIENTE: 'background:rgba(234,179,8,0.15);color:#fbbf24;border:1px solid rgba(234,179,8,0.3);',
     ACTIVO: 'background:rgba(22,101,52,0.25);color:#86efac;border:1px solid rgba(34,197,94,0.3);',
-    VENCIDO: 'background:rgba(194,65,12,0.2);color:#fdba74;border:1px solid rgba(249,115,22,0.3);',
     FINALIZADO: 'background:rgba(29,78,216,0.2);color:#93c5fd;border:1px solid rgba(59,130,246,0.3);',
     ANULADO: 'background:rgba(127,29,29,0.35);color:#fca5a5;border:1px solid rgba(239,68,68,0.3);',
   }

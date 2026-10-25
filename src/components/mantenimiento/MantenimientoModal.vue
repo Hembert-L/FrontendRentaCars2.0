@@ -262,6 +262,7 @@ import { useAppTheme } from "@/composables/useAppTheme";
 import { nombreVehiculo } from "@/utils/reservaFormatters";
 import api from "@/services/api";
 import { fetchAllPaginated } from "@/utils/apiPagination";
+import { errorTexto } from "@/utils/validacionesTexto";
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -468,6 +469,8 @@ function validar() {
   if ((form.value.lugar || "").trim().length > 150)
     errors.value.lugar = "Máximo 150 caracteres";
   if (!form.value.lugar?.trim()) errors.value.lugar = "Requerido";
+  else if (!errors.value.lugar && errorTexto(form.value.lugar, { campo: "El lugar", minLetras: 3, numeros: true, simbolos: ".,#-" }))
+    errors.value.lugar = errorTexto(form.value.lugar, { campo: "El lugar", minLetras: 3, numeros: true, simbolos: ".,#-" });
   return Object.keys(errors.value).length === 0;
 }
 

@@ -102,6 +102,10 @@
                 + Cargo $10
               </button>
             </div>
+            <label class="cierre-check mt-3">
+              <input v-model="recibidoConDanios" :disabled="operacionEnCurso" type="checkbox" />
+              <span>Se recibe con daños (el vehículo queda en proceso)</span>
+            </label>
           </section>
 
           <section class="cierre-card">
@@ -390,6 +394,10 @@
             <span>Saldo actual</span>
             <strong>${{ formatPrecio(saldoActual) }}</strong>
           </div>
+          <div v-if="saldoAFavorActual > 0" class="cierre-ticket-row">
+            <span>Saldo a favor actual</span>
+            <strong>${{ formatPrecio(saldoAFavorActual) }}</strong>
+          </div>
           <template v-if="totalPrevisto > 0">
             <p class="cierre-ticket-caption">Aún no registrado</p>
             <div v-if="totalExtras > 0" class="cierre-ticket-row">
@@ -407,8 +415,8 @@
           </template>
         </div>
         <div class="cierre-ticket-total">
-          <span>{{ saldoPendiente > 0 ? (totalPrevisto > 0 ? "Saldo previsto" : "Saldo pendiente") : "Estado de pago" }}</span>
-          <p>{{ saldoPendiente > 0 ? `$${formatPrecio(saldoPendiente)}` : labelPagoContrato }}</p>
+          <span>{{ saldoAFavorPrevisto > 0 ? "Saldo a favor previsto" : saldoPendiente > 0 ? (totalPrevisto > 0 ? "Saldo previsto" : "Saldo pendiente") : "Estado de pago" }}</span>
+          <p>{{ saldoAFavorPrevisto > 0 ? `$${formatPrecio(saldoAFavorPrevisto)}` : saldoPendiente > 0 ? `$${formatPrecio(saldoPendiente)}` : labelPagoContrato }}</p>
         </div>
 
         <div v-if="puedeOfrecerCierreConDeuda" class="cierre-deuda">
@@ -472,6 +480,9 @@ import {
   nivelCombustiblePct,
   nombreVehiculo,
   montoPagadoContrato,
+  saldoPendienteContrato,
+  moneyCents,
+  centsToMoney,
 } from "@/utils/contratoFormatters";
 
 const route = useRoute();
@@ -494,6 +505,7 @@ const operacionEnCurso = computed(() =>
 );
 const salidaConfirmada = ref(false);
 const nivelRecepcion = ref("1/2");
+const recibidoConDanios = ref(false);
 const cargos = ref([]);
 const cargosRegistrados = ref([]);
 const incidencias = ref([]);
@@ -532,8 +544,8 @@ const horasRetraso = computed(() => {
   if (!Number.isFinite(devolucion)) return 0;
   const limite = devolucion + 2 * 3600000;
   if (ahora.value <= limite) return 0;
-  // despues de las 2h de margen se cobran todas las horas, redondeado hacia arriba
-  return Math.max(0, Math.ceil((ahora.value - devolucion) / 3600000));
+  // Cobrar solo las horas posteriores a las 2h de tolerancia, redondeadas hacia arriba.
+  return Math.max(0, Math.ceil((ahora.value - limite) / 3600000));
 });
 const montoRetraso = computed(() => horasRetraso.value * TARIFA_RETRASO_HORA);
 const yaTieneCargoRetraso = computed(() =>
@@ -566,10 +578,7 @@ const ajusteContrato = computed(() => {
   const suma = rentaBase.value + totalCargosRegistrados.value + totalIncidenciasClienteRegistradas.value;
   return Math.round((Number(contrato.value.monto_total_renta || 0) - suma) * 100) / 100;
 });
-const saldoActual = computed(() => {
-  if (!contrato.value) return 0;
-  return Math.max(0, Number(contrato.value.monto_total_renta || 0) - pagadoContrato.value);
-});
+const saldoActual = computed(() => saldoPendienteContrato(contrato.value));
 const aplicaRetrasoAlCerrar = computed(() =>
   aplicarCargoRetraso.value && horasRetraso.value > 0 && !yaTieneCargoRetraso.value,
 );
@@ -579,7 +588,15 @@ const montoRetrasoPrevisto = computed(() =>
 const totalPrevisto = computed(() =>
   totalExtras.value + totalIncidenciasClientePorRegistrar.value + montoRetrasoPrevisto.value,
 );
-const saldoPendiente = computed(() => saldoActual.value + totalPrevisto.value);
+// Conservar el crédito hasta haber incorporado todos los cargos previstos.
+const saldoAFavorActual = computed(() => centsToMoney(Math.max(0,
+  moneyCents(pagadoContrato.value) - moneyCents(contrato.value?.monto_total_renta),
+)));
+const balancePrevisto = computed(() => centsToMoney(
+  moneyCents(contrato.value?.monto_total_renta) - moneyCents(pagadoContrato.value) + moneyCents(totalPrevisto.value),
+));
+const saldoPendiente = computed(() => Math.max(0, balancePrevisto.value));
+const saldoAFavorPrevisto = computed(() => Math.max(0, -balancePrevisto.value));
 const labelPagoContrato = computed(() =>
   contrato.value?.estado_pago === "PAGADO" ? "Pagado" : "Pendiente",
 );
@@ -604,6 +621,7 @@ const mensajeBloqueoCierre = computed(() => {
     return "Hay incidencias pendientes de guardar antes del cierre.";
   if (cerrarConDeuda.value) {
     if (!motivoCierreDeuda.value) return "Escribe el motivo para cerrar con deuda pendiente.";
+    if (motivoCierreDeuda.value.length < 5) return "El motivo debe tener al menos 5 caracteres.";
     return "";
   }
   if (saldoActual.value > 0 || contrato.value.estado_pago !== "PAGADO")
@@ -823,7 +841,7 @@ async function registrarColeccion(tipo, { mostrarExito = false, desdeCobro = fal
       title: esCargo ? "Completa los cargos" : "Completa las incidencias",
       text: esCargo
         ? "Cada cargo debe tener tipo, concepto y un monto mayor a cero (máximo 2 decimales y hasta $999,999.99)."
-        : "Cada incidencia debe tener tipo, responsable, descripción y un costo válido (máximo 2 decimales y hasta $999,999.99).",
+        : "Cada incidencia debe tener tipo, responsable, descripción y un costo válido (máximo 2 decimales y hasta $999,999.99). Si el responsable es el cliente, el costo debe ser mayor a cero.",
       confirmButtonColor: "#922b21",
     });
     return false;
@@ -876,7 +894,8 @@ async function guardarCargosPendientes() {
 
 function incidenciasIncompletas() {
   return incidencias.value.some(
-    (i) => !i.tipo_incidencia || !i.responsable_tipo || !i.descripcion || !montoValido(i.costo || 0, { permitirCero: true }),
+    (i) => !i.tipo_incidencia || !i.responsable_tipo || !i.descripcion || !montoValido(i.costo || 0, { permitirCero: true })
+      || (i.responsable_tipo === "CLIENTE" && Number(i.costo || 0) <= 0),
   );
 }
 
@@ -981,8 +1000,18 @@ async function ejecutarCorreccion(accion, mensajeExito) {
   guardandoCargos.value = true;
   resultadoGuardado.value = "";
   try {
-    await accion();
-    toastSuccess(mensajeExito);
+    const respuesta = await accion();
+    if (respuesta?.advertencia || Number(respuesta?.saldo_a_favor) > 0) {
+      await Swal.fire({
+        icon: "warning",
+        title: mensajeExito,
+        text: [respuesta.advertencia, respuesta.saldo_a_favor != null
+          ? `Saldo a favor confirmado: $${formatPrecio(respuesta.saldo_a_favor)}.` : ""].filter(Boolean).join(" "),
+        confirmButtonColor: "#922b21",
+      });
+    } else {
+      toastSuccess(mensajeExito);
+    }
   } catch (e) {
     await Swal.fire({ icon: "error", title: "No se pudo guardar", text: mensajeErrorOriginal(e), confirmButtonColor: "#922b21" });
   } finally {
@@ -1173,7 +1202,7 @@ async function cerrarRenta() {
     const payload = {
       fecha_hora_recepcion: fechaHoraActualApi(),
       nivel_combustible_recepcion: nivelRecepcion.value,
-      estado_vehiculo_recepcion: "RECIBIDO",
+      estado_vehiculo_recepcion: recibidoConDanios.value ? "RECIBIDO CON DAÑOS" : "RECIBIDO",
       aplicar_cargo_retraso: aplicaRetrasoAlCerrar.value,
     };
     if (conDeuda) {
@@ -1194,7 +1223,13 @@ async function cerrarRenta() {
       });
       return;
     }
-    toastSuccess(conDeuda ? "Renta cerrada con deuda" : "Renta cerrada", "Vehículo liberado.");
+    await Swal.fire({
+      icon: "success",
+      title: conDeuda ? "Renta cerrada con deuda" : "Renta cerrada",
+      text: [respuesta.message || "Renta cerrada con éxito.", respuesta.data?.monto_devuelto != null
+        ? `Monto devuelto confirmado: $${formatPrecio(respuesta.data.monto_devuelto)}.` : ""].filter(Boolean).join(" "),
+      confirmButtonColor: "#922b21",
+    });
     cerrando.value = false;
     salidaConfirmada.value = true;
     await router.push({ name: "contratos" });

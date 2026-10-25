@@ -259,7 +259,7 @@ import api from '@/services/api'
 import { getToken } from '@/services/authToken'
 import { fetchAllPaginated } from '@/utils/apiPagination'
 import { toastSuccess } from '@/utils/toast'
-import { formatPrecio, saldoPendienteContrato, montoExtrasContrato, totalFinalContrato, moneyCents, toMoneyNumber } from '@/utils/contratoFormatters'
+import { formatPrecio, montoPagadoContrato, saldoPendienteContrato, montoExtrasContrato, totalFinalContrato, moneyCents, toMoneyNumber } from '@/utils/contratoFormatters'
 
 const route = useRoute()
 const { isDark } = useAppTheme()
@@ -477,13 +477,8 @@ async function completarContratoConPagos(contrato) {
     { search: contrato.numero_contrato, per_page: 100 },
   )
   const pagosContrato = items.filter((p) => Number(p.contrato_id || p.contrato?.id) === Number(contrato.id))
-  return {
-    ...contrato,
-    pagos: pagosContrato,
-    monto_pagado: pagosContrato
-      .filter((p) => p.estado_transaccion === 'CONFIRMADO')
-      .reduce((s, p) => s + Number(p.monto || 0), 0),
-  }
+  const completo = { ...contrato, pagos: pagosContrato }
+  return { ...completo, monto_pagado: montoPagadoContrato(completo) }
 }
 
 async function registrarPago(form) {
@@ -565,17 +560,17 @@ async function reconciliarDatos(contrato = contratoSel.value) {
       contrato?.id ? contratosStore.fetchContrato(contrato.id) : Promise.resolve(null),
       contrato?.id ? completarContratoConPagos(contrato) : Promise.resolve(null),
       pagosStore.fetchPagos({}, { silencioso: true, lanzarError: true }),
-      fetchAllPaginated((params) => api.get('/admin/contratos', { params })),
+      contratosStore.fetchContratos({}, { lanzarError: true }),
       cargarCierres(),
     ])
-    const [detalle, historial, , contratos] = resultados
+    const [detalle, historial] = resultados
     if (contrato?.id) {
       const actualizado = detalle.status === 'fulfilled' ? detalle.value : contratoSel.value
-      contratoSel.value = historial.status === 'fulfilled'
-        ? { ...actualizado, pagos: historial.value.pagos, monto_pagado: historial.value.monto_pagado }
+      const completo = historial.status === 'fulfilled'
+        ? { ...actualizado, pagos: historial.value.pagos }
         : actualizado
+      contratoSel.value = { ...completo, monto_pagado: montoPagadoContrato(completo) }
     }
-    if (contratos.status === 'fulfilled') contratosStore.contratos = contratos.value.items
     const nombres = ['contrato seleccionado', 'pagos del contrato', 'listado de pagos', 'listado de contratos']
     errorRecarga.value = resultados.slice(0, 4).map((r, i) => r.status === 'rejected'
       ? `No se pudo actualizar ${nombres[i]}: ${mensajeOriginal(r.reason)}` : '').filter(Boolean).join(' ')

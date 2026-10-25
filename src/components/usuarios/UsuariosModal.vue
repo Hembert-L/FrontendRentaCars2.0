@@ -159,6 +159,7 @@
 import { ref, reactive, watch, computed } from 'vue'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { esAdministrador } from '@/utils/usuario'
+import { errorNombrePersona } from '@/utils/validacionesTexto'
 
 const { isDark } = useAppTheme()
 
@@ -221,26 +222,27 @@ watch(() => props.visible, (val) => {
 // solo letras, espacios, apostrofo y guion (igual que el back)
 const SOLO_LETRAS = /^\p{L}[\p{L}\s'-]*$/u
 
-function errorNombre(valor, max = 100) {
+function errorNombre(valor, max = 100, campo = 'nombre') {
   const texto = (valor || '').trim()
   if (!texto) return 'Requerido'
   if (/\d/.test(texto)) return 'No puede llevar números'
   if (!SOLO_LETRAS.test(texto)) return 'Solo letras y espacios'
   if (texto.length < 2) return 'Mínimo 2 letras'
   if (texto.length > max) return `Máximo ${max} caracteres`
-  return ''
+  return errorNombrePersona(texto, { palabrasMinimas: 1, campo })
 }
 
 function validar() {
   Object.keys(errors).forEach(k => errors[k] = '')
   let ok = true
   errors.nombre = errorNombre(form.nombre, 15)
-  errors.apellido = errorNombre(form.apellido)
+  errors.apellido = errorNombre(form.apellido, 100, 'apellido')
   if (errors.nombre || errors.apellido) ok = false
   if (!form.correo || !/\S+@\S+\.\S+/.test(form.correo)) { errors.correo = 'Correo inválido'; ok = false }
   if (!esAdminUsuario.value && !form.rol) { errors.rol = 'Selecciona un rol'; ok = false }
   const cambiaPassword = !props.modoEdicion || form.password.length > 0
   if (cambiaPassword && form.password.length < 8) { errors.password = 'Mínimo 8 caracteres'; ok = false }
+  else if (cambiaPassword && (!/[A-Za-z]/.test(form.password) || !/\d/.test(form.password))) { errors.password = 'Debe llevar al menos una letra y un número'; ok = false }
   return ok
 }
 

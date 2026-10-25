@@ -39,6 +39,7 @@ function tituloNotificacion(tipo) {
     seguro_por_vencer: 'Seguro por vencer',
     pago_pendiente: 'Pago pendiente',
     pago_parcial: 'Pago parcial',
+    saldo_a_favor: 'Saldo a favor',
     incidencia_pendiente: 'Incidencia pendiente',
     reserva_creada: 'Reserva reciente',
   }
@@ -51,6 +52,9 @@ function prioridadOrden(prioridad) {
 }
 
 function rutaNotificacion(notif) {
+  if (normalizarTipo(notif.tipo) === 'saldo_a_favor' && notif.contrato_id) {
+    return { name: 'contrato-cierre', params: { id: notif.contrato_id } }
+  }
   if (notif.contrato_id) return { name: 'pagos', query: { contrato_id: notif.contrato_id } }
   if (notif.cliente_id) return { name: 'clientes' }
   if (notif.vehiculo_id) return { name: 'vehiculos' }

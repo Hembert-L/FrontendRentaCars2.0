@@ -1,4 +1,5 @@
 import { fechaHoyLocal, fechaSoloISO } from './reservaFormatters'
+import { normalizarPorcentajeDescuento } from './descuentoConfig'
 
 export const HORAS_PERMITIDAS = ['06:00', '06:30', '07:00', '18:00', '18:30', '19:00']
 
@@ -115,7 +116,7 @@ export function reservaChocaConContratoDirecto(fechaEntrega, fechaDevolucion, re
 }
 
 export function labelEstadoContrato(e) {
-  const m = { PENDIENTE: 'Pendiente', ACTIVO: 'Activo', VENCIDO: 'Vencido', FINALIZADO: 'Finalizado', ANULADO: 'Anulado' }
+  const m = { PENDIENTE: 'Pendiente', ACTIVO: 'Activo', FINALIZADO: 'Finalizado', ANULADO: 'Anulado' }
   return m[e] || e
 }
 
@@ -146,7 +147,6 @@ export function badgeEstadoContrato(estado, isDark = false) {
     const m = {
       PENDIENTE: 'bg-gray-800 text-gray-300 border-gray-700',
       ACTIVO: 'bg-red-950/60 text-red-300 border-red-900/60',
-      VENCIDO: 'bg-amber-950/60 text-amber-300 border-amber-900/60',
       FINALIZADO: 'bg-green-950/60 text-green-300 border-green-900/60',
       ANULADO: 'bg-gray-800 text-gray-500 border-gray-700',
     }
@@ -155,7 +155,6 @@ export function badgeEstadoContrato(estado, isDark = false) {
   const m = {
     PENDIENTE: 'bg-gray-100 text-gray-700 border-gray-200',
     ACTIVO: 'bg-red-50 text-red-800 border-red-200',
-    VENCIDO: 'bg-amber-50 text-amber-800 border-amber-200',
     FINALIZADO: 'bg-green-50 text-green-800 border-green-200',
     ANULADO: 'bg-gray-100 text-gray-500 border-gray-200',
   }
@@ -167,15 +166,24 @@ export function metodoPagoIcon(metodo) {
   return m[metodo] || 'pi-dollar'
 }
 
-export function documentosVigentes(cliente) {
-  if (!cliente) return { ok: false, duiVencido: false, licenciaVencida: true }
-  // Compara días calendario locales, sin convertir las fechas de la API a UTC.
-  const licencia = fechaSoloISO(cliente.vencimiento_licencia)
-  const [anio, mes, dia] = licencia.split('-').map(Number)
-  const fecha = new Date(anio, mes - 1, dia)
-  const fechaValida = fecha.getFullYear() === anio && fecha.getMonth() === mes - 1 && fecha.getDate() === dia
-  const licenciaVencida = !fechaValida || licencia <= fechaHoyLocal()
-  return { ok: !licenciaVencida, duiVencido: false, licenciaVencida }
+export function documentosVigentes(cliente, fechaEvaluacion = fechaHoyLocal()) {
+  // Días calendario de la API: no convertir vencimientos a UTC.
+  const limite = fechaSoloISO(fechaEvaluacion) || fechaHoyLocal()
+  const faltantes = !cliente || ['vencimiento_dui', 'vencimiento_licencia'].some((campo) => cliente[campo] === undefined)
+  const noVigente = (valor) => {
+    if (valor === undefined) return false // omitido no equivale a vencido
+    const iso = fechaSoloISO(valor)
+    const [y, m, d] = iso.split('-').map(Number)
+    const fecha = new Date(y, m - 1, d)
+    return !iso || fecha.getFullYear() !== y || fecha.getMonth() !== m - 1 || fecha.getDate() !== d || iso <= limite
+  }
+  const duiVencido = noVigente(cliente?.vencimiento_dui)
+  const licenciaVencida = noVigente(cliente?.vencimiento_licencia)
+  const documentos = [duiVencido ? 'DUI' : '', licenciaVencida ? 'licencia' : ''].filter(Boolean).join(' y ')
+  const mensaje = documentos
+    ? `El documento (${documentos}) debe tener una fecha válida y vencer después del ${limite}. Actualízalo desde Clientes.`
+    : faltantes ? 'Faltan datos para comprobar el vencimiento del DUI y la licencia.' : ''
+  return { ok: !faltantes && !duiVencido && !licenciaVencida, duiVencido, licenciaVencida, faltantes, mensaje }
 }
 
 export function nivelCombustiblePct(valor) {
@@ -194,11 +202,16 @@ export function montoExtrasContrato(contrato) {
 
 export function montoPagadoContrato(contrato) {
   if (!contrato) return 0
-  if (contrato.monto_pagado != null) return toMoneyNumber(contrato.monto_pagado)
+  // Con pagos físicos disponibles, recalcular siempre: monto_pagado puede estar obsoleto.
+  if (!Array.isArray(contrato.pagos) && contrato.monto_pagado != null) {
+    return toMoneyNumber(contrato.monto_pagado)
+  }
   const pagos = contrato.pagos || []
-  return centsToMoney(pagos
+  const confirmado = pagos
     .filter((p) => p.estado_transaccion === 'CONFIRMADO')
-    .reduce((s, p) => s + moneyCents(p.monto), 0))
+    .reduce((s, p) => s + moneyCents(p.monto), 0)
+  return centsToMoney(confirmado + moneyCents(contrato.saldo_trasladado)
+    - moneyCents(contrato.continuacion?.saldo_trasladado))
 }
 
 // ya incluye cargos e incidencias del cliente
@@ -212,11 +225,34 @@ export function saldoPendienteContrato(contrato) {
   return centsToMoney(Math.max(0, moneyCents(totalFinalContrato(contrato)) - moneyCents(montoPagadoContrato(contrato))))
 }
 
-// mismas reglas que el back: no negativo, max 2 decimales y no mas que el subtotal
-export function errorDescuentoContrato(descuento, subtotal) {
+export function maximoDescuentoContrato(subtotal, porcentajeMaximo) {
+  const porcentaje = normalizarPorcentajeDescuento(porcentajeMaximo)
+  if (porcentaje === null) return null
+  // Subtotal en centavos y porcentaje como fracción decimal exacta (incluye notación científica).
+  // No multiplicar importes binarios: 4.27 * 50 / 100 puede quedar por debajo de 2.135.
+  const [coeficiente, exponente = '0'] = String(porcentaje).split('e')
+  const [entero, decimales = ''] = coeficiente.split('.')
+  const escala = decimales.length - Number(exponente)
+  let numerador = BigInt(entero + decimales)
+  let denominador = 100n
+  if (escala >= 0) denominador *= 10n ** BigInt(escala)
+  else numerador *= 10n ** BigInt(-escala)
+  const producto = BigInt(moneyCents(subtotal)) * numerador
+  const magnitud = producto < 0n ? -producto : producto
+  // PHP round(..., 2): el medio centavo se aleja de cero; los demás restos no suben.
+  const cociente = magnitud / denominador
+  const resto = magnitud % denominador
+  const centavos = cociente + (resto * 2n >= denominador ? 1n : 0n)
+  return centsToMoney(Number(producto < 0n ? -centavos : centavos))
+}
+
+// No negativo, máximo dos decimales y límite porcentual configurado para el entorno.
+export function errorDescuentoContrato(descuento, subtotal, porcentajeMaximo) {
   const n = Number(descuento || 0)
   if (!Number.isFinite(n) || n < 0) return 'El descuento no puede ser negativo.'
   if (!/^\d+(\.\d{1,2})?$/.test(String(n))) return 'Usa máximo dos decimales.'
-  if (n > Number(subtotal || 0)) return `El descuento no puede ser mayor que el subtotal ($${formatPrecio(subtotal)}).`
+  const maximo = maximoDescuentoContrato(subtotal, porcentajeMaximo)
+  if (maximo === null) return 'No se pudo determinar el límite de descuento. Contacta al administrador.'
+  if (moneyCents(n) > moneyCents(maximo)) return `El descuento no puede superar el ${porcentajeMaximo}% de la renta ($${formatPrecio(maximo)}).`
   return ''
 }

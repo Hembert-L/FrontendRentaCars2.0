@@ -28,8 +28,8 @@
         </div>
         <button type="button" class="text-xs font-bold underline" style="color:#c0392b;" @click="limpiar">Cambiar</button>
       </div>
-      <p v-if="!alertaDocs.ok" class="text-xs font-bold mt-2" style="color:#c0392b;">
-        <i class="pi pi-exclamation-triangle"></i> Licencia vencida - no puede continuar
+      <p v-if="mensajeDocumentos || !alertaDocs.ok" class="text-xs font-bold mt-2" style="color:#c0392b;">
+        <i class="pi pi-exclamation-triangle"></i> {{ mensajeDocumentos || alertaDocs.mensaje }}
       </p>
     </div>
 
@@ -172,6 +172,8 @@ import { formatFecha, nombreVehiculo } from '@/utils/reservaFormatters'
 
 const props = defineProps({
   modelValue: { type: Object, default: null },
+  estadoDocumentos: { type: Object, default: null },
+  mensajeDocumentos: { type: String, default: '' },
   cargandoReservas: { type: Boolean, default: false },
   sinReserva: { type: Boolean, default: false },
   reservas: { type: Array, default: () => [] },
@@ -205,7 +207,7 @@ let busquedaActiva = 0
 const shellClass = computed(() =>
   isDark.value ? 'form-section-dark bg-gray-900 border-gray-800' : 'form-section-light bg-white border-gray-100',
 )
-const alertaDocs = computed(() => documentosVigentes(cliente.value))
+const alertaDocs = computed(() => props.estadoDocumentos || documentosVigentes(cliente.value))
 
 function estadoBadge(estado) {
   const map = {

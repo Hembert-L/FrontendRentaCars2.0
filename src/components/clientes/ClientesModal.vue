@@ -74,6 +74,7 @@
                     v-model="form.vencimiento_dui"
                     type="date"
                     :min="fechaMinimaDui"
+                    :max="fechaMaximaVencimiento"
                     class="field-input"
                     :class="errors.vencimiento_dui ? 'error' : ''"
                   />
@@ -92,7 +93,7 @@
                     type="text"
                     inputmode="numeric"
                     placeholder="10000001"
-                    maxlength="30"
+                    maxlength="14"
                     class="field-input"
                     :class="errors.numero_licencia ? 'error' : ''"
                   />
@@ -106,6 +107,7 @@
                     v-model="form.vencimiento_licencia"
                     type="date"
                     :min="fechaMinimaLicencia"
+                    :max="fechaMaximaVencimiento"
                     class="field-input"
                     :class="errors.vencimiento_licencia ? 'error' : ''"
                   />
@@ -206,6 +208,7 @@ import { ref, reactive, watch, computed } from 'vue'
 import TelefonoPaisInput from '@/components/common/TelefonoPaisInput.vue'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { useClientesStore } from '@/stores/clientes'
+import { errorNombrePersona } from '@/utils/validacionesTexto'
 import {
   CODIGO_PAIS_DEFAULT,
   buscarPaisTelefono,
@@ -261,6 +264,8 @@ const errors = reactive({
 
 const fechaMinimaDui = computed(() => fechaMananaLocal())
 const fechaMinimaLicencia = computed(() => fechaMananaLocal())
+// el back no deja vencimientos a mas de 10 años
+const fechaMaximaVencimiento = computed(() => fechaEnAniosLocal(10))
 
 const municipioPlaceholder = computed(() => {
   if (!form.departamento_id) return 'Selecciona primero un departamento'
@@ -370,6 +375,9 @@ function validar() {
   else if (!nombreTieneFormatoValido(form.nombre)) {
     errors.nombre = 'El nombre solo debe contener letras, espacios, acentos, guion o apostrofo.'
     ok = false
+  } else if (errorNombrePersona(form.nombre)) {
+    errors.nombre = errorNombrePersona(form.nombre)
+    ok = false
   }
   if (!form.dui) {
     errors.dui = 'El DUI es obligatorio.'
@@ -390,12 +398,21 @@ function validar() {
   } else if (!fechaPosteriorAHoy(form.vencimiento_dui)) {
     errors.vencimiento_dui = 'El DUI debe vencer después de hoy.'
     ok = false
+  } else if (form.vencimiento_dui > fechaMaximaVencimiento.value) {
+    errors.vencimiento_dui = 'El vencimiento del DUI no puede pasar de 10 años.'
+    ok = false
   }
   if (!form.numero_licencia) {
     errors.numero_licencia = 'El número de licencia es obligatorio.'
     ok = false
-  } else if (!/^\d{1,30}$/.test(form.numero_licencia)) {
+  } else if (!/^\d+$/.test(form.numero_licencia)) {
     errors.numero_licencia = 'El número de licencia solo debe contener números.'
+    ok = false
+  } else if (![9, 14].includes(form.numero_licencia.length)) {
+    errors.numero_licencia = 'La licencia debe tener 9 dígitos (número de DUI) o 14 dígitos (NIT).'
+    ok = false
+  } else if (/^(\d)\1+$/.test(form.numero_licencia)) {
+    errors.numero_licencia = 'Ingresa un número de licencia real, no una secuencia repetida.'
     ok = false
   }
   if (!form.vencimiento_licencia) {
@@ -403,6 +420,9 @@ function validar() {
     ok = false
   } else if (!fechaPosteriorAHoy(form.vencimiento_licencia)) {
     errors.vencimiento_licencia = 'La licencia debe vencer después de hoy.'
+    ok = false
+  } else if (form.vencimiento_licencia > fechaMaximaVencimiento.value) {
+    errors.vencimiento_licencia = 'El vencimiento de la licencia no puede pasar de 10 años.'
     ok = false
   }
   const telefonoError = validarTelefonoPais(form.telefono, buscarPaisTelefono(form.pais_telefono))
@@ -501,6 +521,15 @@ function fechaMananaLocal() {
   const year = manana.getFullYear()
   const month = String(manana.getMonth() + 1).padStart(2, '0')
   const day = String(manana.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function fechaEnAniosLocal(anios) {
+  const fecha = new Date()
+  fecha.setFullYear(fecha.getFullYear() + anios)
+  const year = fecha.getFullYear()
+  const month = String(fecha.getMonth() + 1).padStart(2, '0')
+  const day = String(fecha.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
 }
 
