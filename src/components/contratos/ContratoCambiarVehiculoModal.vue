@@ -38,7 +38,9 @@
               <p><span class="opacity-60">Vehículo actual:</span> <strong>{{ nombreVehiculo(contrato?.vehiculo) }}</strong> · {{ contrato?.vehiculo?.placa }}</p>
               <p><span class="opacity-60">Devolución acordada:</span> {{ formatFechaHora12(contrato?.fecha_hora_devolucion) }}</p>
               <p class="text-xs pt-1" :class="isDark ? 'text-gray-400' : 'text-gray-500'">
-                El precio y las fechas del contrato no cambian. El vehículo actual pasa a <strong>En proceso</strong>
+                Se cerrará este contrato y se creará una continuación con el vehículo de reemplazo,
+                la misma tarifa diaria y la devolución acordada. El servidor calculará los días,
+                el descuento y el saldo que se trasladan. El vehículo actual pasa a <strong>En proceso</strong>
                 y se registra una incidencia por daño mecánico que no se cobra al cliente.
               </p>
             </div>
@@ -77,6 +79,15 @@
                 </select>
                 <p v-if="errores.nivel_combustible_entrega" class="field-error">{{ errores.nivel_combustible_entrega }}</p>
               </div>
+            </div>
+
+            <div>
+              <label class="field-label" :class="isDark ? 'text-gray-400' : 'text-gray-500'">Combustible de recepción del vehículo anterior (opcional)</label>
+              <select v-model="form.nivel_combustible_recepcion" class="field-input" :class="claseInput(errores.nivel_combustible_recepcion)" :disabled="guardando">
+                <option value="">Usar el combustible de entrega del vehículo anterior</option>
+                <option v-for="n in NIVELES_COMBUSTIBLE" :key="n.value" :value="n.value">{{ n.label }}</option>
+              </select>
+              <p v-if="errores.nivel_combustible_recepcion" class="field-error">{{ errores.nivel_combustible_recepcion }}</p>
             </div>
 
             <div>
@@ -168,6 +179,7 @@ const form = reactive({
   vehiculo_nuevo_id: '',
   responsable_tipo: 'NEGOCIO',
   nivel_combustible_entrega: '1/2',
+  nivel_combustible_recepcion: '',
   motivo: '',
   costo: '',
 })
@@ -189,6 +201,7 @@ watch(
       vehiculo_nuevo_id: '',
       responsable_tipo: 'NEGOCIO',
       nivel_combustible_entrega: normalizarNivelCombustible(props.contrato?.nivel_combustible_entrega) || '1/2',
+      nivel_combustible_recepcion: '',
       motivo: '',
       costo: '',
     })
@@ -240,6 +253,9 @@ function validar() {
   if (!form.vehiculo_nuevo_id) e.vehiculo_nuevo_id = 'Debe seleccionar el vehículo de reemplazo.'
   if (!form.motivo.trim()) e.motivo = 'Debe describir el desperfecto del vehículo.'
   else if (form.motivo.trim().length < 5) e.motivo = 'El motivo debe tener al menos 5 caracteres.'
+  if (form.nivel_combustible_recepcion && !NIVELES_COMBUSTIBLE.some((n) => n.value === form.nivel_combustible_recepcion)) {
+    e.nivel_combustible_recepcion = 'Selecciona un nivel de combustible válido.'
+  }
   if (form.costo !== '' && form.costo !== null) {
     const costo = Number(form.costo)
     if (!Number.isFinite(costo) || costo < 0 || costo > 999999.99) e.costo = 'El costo debe estar entre 0 y 999,999.99.'
@@ -253,8 +269,8 @@ async function confirmar() {
   const vehiculo = vehiculos.value.find((v) => Number(v.id) === Number(form.vehiculo_nuevo_id))
   const { isConfirmed } = await Swal.fire({
     icon: 'warning',
-    title: '¿Cambiar el vehículo del contrato?',
-    text: `El contrato pasará a ${nombreVehiculo(vehiculo)} (${vehiculo?.placa}) y ${props.contrato?.vehiculo?.placa || 'el vehículo actual'} quedará En proceso.`,
+    title: '¿Cerrar este contrato y crear su continuación?',
+    text: `Se cerrará ${props.contrato?.numero_contrato} y se creará otro contrato con ${nombreVehiculo(vehiculo)} (${vehiculo?.placa}) y ${props.contrato?.vehiculo?.placa || 'el vehículo actual'} quedará En proceso.`,
     showCancelButton: true,
     confirmButtonText: 'Sí, cambiar',
     cancelButtonText: 'Volver',
@@ -269,6 +285,7 @@ async function confirmar() {
     vehiculo_nuevo_id: Number(form.vehiculo_nuevo_id),
     responsable_tipo: form.responsable_tipo,
     nivel_combustible_entrega: form.nivel_combustible_entrega,
+    ...(form.nivel_combustible_recepcion ? { nivel_combustible_recepcion: form.nivel_combustible_recepcion } : {}),
     motivo: form.motivo.trim(),
     costo: form.costo === '' || form.costo === null ? null : Number(form.costo),
   })

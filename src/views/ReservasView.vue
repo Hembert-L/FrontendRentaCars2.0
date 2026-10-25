@@ -323,6 +323,8 @@ import Swal from 'sweetalert2'
 import ReservaEditarModal from '@/components/reservas/ReservaEditarModal.vue'
 import ReservaCancelarModal from '@/components/reservas/ReservaCancelarModal.vue'
 import ReservasCanceladasModal from '@/components/reservas/ReservasCanceladasModal.vue'
+import { useClientesStore } from '@/stores/clientes'
+import { documentosVigentes } from '@/utils/contratoFormatters'
 import { useReservasStore } from '@/stores/reservas'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { formatFecha, fechaHoyLocal, fechaSoloISO, sumarDiasISO } from '@/utils/reservaFormatters'
@@ -332,6 +334,7 @@ import { fetchAllPaginated } from '@/utils/apiPagination'
 
 const { isDark } = useAppTheme()
 const store = useReservasStore()
+const clientesStore = useClientesStore()
 
 const search                  = ref('')
 const filtroEstado              = ref('')
@@ -516,6 +519,9 @@ async function guardarReserva(form) {
   if (!puedeEditarReserva(actual)) return
   guardandoEdicion.value = true
   try {
+    const cliente = await clientesStore.completarDocumentos({ ...actual.cliente, id: actual.cliente?.id || actual.cliente_id })
+    const documentos = documentosVigentes(cliente, form.fecha_fin)
+    if (!documentos.ok) throw new Error(documentos.mensaje)
     await store.actualizar(actual.id, {
       fecha_inicio: form.fecha_inicio,
       fecha_fin:    form.fecha_fin,
@@ -528,7 +534,7 @@ async function guardarReserva(form) {
     await Swal.fire({
       icon: 'error',
       title: 'No se pudo actualizar',
-      text: e.response?.data?.message || store.error || 'Intenta de nuevo.',
+      text: e.response?.data?.message || e.message || store.error || 'Intenta de nuevo.',
       confirmButtonColor: '#922b21',
       background: isDark.value ? '#1f2937' : '#fff',
       color: isDark.value ? '#f3f4f6' : '#111827',

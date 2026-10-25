@@ -64,6 +64,8 @@
               <p><span class="opacity-60">Vehículo:</span> <strong :class="isDark ? 'text-gray-100' : 'text-gray-800'">{{ nombreVehiculo(reserva?.vehiculo) }}</strong> · {{ reserva?.vehiculo?.placa }}</p>
             </div>
 
+            <p v-if="mensajeDocumentos" role="alert" class="field-error">{{ mensajeDocumentos }}</p>
+            <button v-if="errorDocumentos" type="button" class="text-sm underline" @click="reintentarDocumentos">Reintentar comprobación documental</button>
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="field-label">Fecha inicio</label>
@@ -109,7 +111,7 @@
                 type="submit"
                 class="flex-1 py-2.5 rounded-xl font-bold text-sm text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                 style="background:#922b21;"
-                :disabled="guardando"
+                :disabled="guardando || !documentosOk"
               >
                 <i v-if="guardando" class="pi pi-spin pi-spinner mr-1"></i>
                 {{ guardando ? 'Actualizando...' : 'Actualizar fechas' }}
@@ -124,6 +126,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { useDocumentosCliente } from '@/composables/useDocumentosCliente'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { nombreVehiculo, fechaHoyLocal, sumarDiasISO } from '@/utils/reservaFormatters'
 import { fechaMaximaPermitida, pasaFechaMaxima, mensajeFechaMaxima } from '@/utils/rangoFechas'
@@ -147,6 +150,10 @@ const form = ref({
 })
 
 const errors = ref({})
+const { ok: documentosOk, mensaje: mensajeDocumentos, error: errorDocumentos, reintentar: reintentarDocumentos } = useDocumentosCliente(
+  () => props.reserva?.cliente ? { ...props.reserva.cliente, id: props.reserva.cliente.id || props.reserva.cliente_id } : null,
+  () => form.value.fecha_fin,
+)
 
 const hoy = computed(() => fechaHoyLocal())
 const manana = computed(() => sumarDiasISO(hoy.value, 1))
@@ -193,7 +200,7 @@ function validar() {
   if (!errors.value.fecha_fin && pasaFechaMaxima(form.value.fecha_fin)) {
     errors.value.fecha_fin = mensajeFechaMaxima()
   }
-  return Object.keys(errors.value).length === 0
+  return documentosOk.value && Object.keys(errors.value).length === 0
 }
 
 function handleGuardar() {

@@ -30,6 +30,8 @@
           <ReservaClienteBuscar
             v-model:busqueda="busquedaCliente"
             :cliente-seleccionado="clienteSeleccionado"
+            :fecha-evaluacion="fechaFin"
+            :mensaje-documentos="mensajeDocumentos"
             :resultados="resultadosClientes"
             :buscando="buscandoClientes"
             :error="errorListadoClientes"
@@ -41,8 +43,9 @@
             @agregar-nuevo="abrirModalCliente"
           />
 
+          <button v-if="errorDocumentos" type="button" class="text-sm underline" @click="reintentarDocumentos">Reintentar comprobación documental</button>
           <ReservaFechas
-            v-if="clientePuedeReservar"
+            v-if="clienteSeleccionado"
             v-model:fecha-inicio="fechaInicio"
             v-model:fecha-fin="fechaFin"
             v-model:tipo-reserva="tipoReserva"
@@ -113,7 +116,7 @@ import { useClientesStore } from "@/stores/clientes";
 import { useReservasStore } from "@/stores/reservas";
 import { useAppTheme } from "@/composables/useAppTheme";
 import { fechaHoyLocal, sumarDiasISO, diasEntreFechasISO } from "@/utils/reservaFormatters";
-import { documentosVigentes } from "@/utils/contratoFormatters";
+import { useDocumentosCliente } from "@/composables/useDocumentosCliente";
 import { pasaFechaMaxima, mensajeFechaMaxima } from "@/utils/rangoFechas";
 import { toastSuccess } from "@/utils/toast";
 
@@ -123,8 +126,7 @@ const clientesStore = useClientesStore();
 const reservasStore = useReservasStore();
 
 const clienteSeleccionado = ref(null);
-const clientePuedeReservar = computed(() => documentosVigentes(clienteSeleccionado.value).ok);
-const mensajeLicencia = "No se puede reservar: la licencia debe vencer después de hoy. Actualiza la licencia desde Clientes para continuar.";
+
 const busquedaCliente = ref("");
 const resultadosClientes = ref([]);
 const buscandoClientes = ref(false);
@@ -145,6 +147,7 @@ let consultaVehiculosVersion = 0;
 
 const fechaInicio = ref("");
 const fechaFin = ref("");
+const { ok: clientePuedeReservar, mensaje: mensajeDocumentos, error: errorDocumentos, reintentar: reintentarDocumentos } = useDocumentosCliente(() => clienteSeleccionado.value, () => fechaFin.value);
 const tipoReserva = ref("ANTISIPADA");
 const errorFechaInicio = ref("");
 const errorFechaFin = ref("");
@@ -263,7 +266,7 @@ function limpiarDatosReserva() {
   onFechasChange();
 }
 
-watch([clienteSeleccionado, clientePuedeReservar], limpiarDatosReserva, { flush: "sync" });
+watch(clienteSeleccionado, limpiarDatosReserva, { flush: "sync" });
 
 function abrirModalCliente() {
   erroresCliente.value = {};
@@ -348,7 +351,7 @@ function validarFechas() {
 }
 
 async function consultarVehiculos() {
-  if (!documentosVigentes(clienteSeleccionado.value).ok || !validarFechas()) return;
+  if (!clientePuedeReservar.value || !validarFechas()) return;
   const version = ++consultaVehiculosVersion;
   errorGlobal.value = "";
   cargandoVehiculos.value = true;
@@ -360,11 +363,11 @@ async function consultarVehiculos() {
       fechaInicio.value,
       fechaFin.value,
     );
-    if (version !== consultaVehiculosVersion || !documentosVigentes(clienteSeleccionado.value).ok) return;
+    if (version !== consultaVehiculosVersion || !clientePuedeReservar.value) return;
     vehiculosDisponibles.value = disponibles;
     vehiculosConsultados.value = true;
   } catch (e) {
-    if (version !== consultaVehiculosVersion || !documentosVigentes(clienteSeleccionado.value).ok) return;
+    if (version !== consultaVehiculosVersion || !clientePuedeReservar.value) return;
     errorGlobal.value = e.response?.data?.message || e.message || "No se pudieron consultar los vehículos.";
     vehiculosDisponibles.value = [];
     vehiculosConsultados.value = false;
@@ -392,7 +395,7 @@ onUnmounted(() => {
 });
 
 function seleccionarVehiculo(v) {
-  if (!documentosVigentes(clienteSeleccionado.value).ok) return;
+  if (!clientePuedeReservar.value) return;
   vehiculoSeleccionado.value = v;
   errorGlobal.value = "";
 }
@@ -402,9 +405,8 @@ async function confirmarReserva() {
     errorGlobal.value = "Selecciona un cliente.";
     return;
   }
-  if (!documentosVigentes(clienteSeleccionado.value).ok) {
-    limpiarDatosReserva();
-    errorGlobal.value = mensajeLicencia;
+  if (!clientePuedeReservar.value) {
+    errorGlobal.value = mensajeDocumentos.value;
     return;
   }
   if (!validarFechas()) return;

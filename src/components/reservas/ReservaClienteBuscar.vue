@@ -57,7 +57,7 @@
             </span>
             <span class="license-badge" :class="licenciaVigente(cliente) ? 'license-badge--valid' : 'license-badge--expired'">
               <i :class="licenciaVigente(cliente) ? 'pi pi-check-circle' : 'pi pi-exclamation-triangle'"></i>
-              {{ licenciaVigente(cliente) ? 'Vigente' : 'Licencia vencida' }}
+              {{ licenciaVigente(cliente) ? 'Documentos vigentes' : (documentosVigentes(cliente, fechaEvaluacion).faltantes ? 'Por comprobar' : 'Documentos no vigentes') }}
             </span>
           </span>
           <i
@@ -97,14 +97,13 @@
     </div>
 
     <p
-      v-if="clienteSeleccionado && !licenciaVigente(clienteSeleccionado)"
+      v-if="clienteSeleccionado && mensajeDocumentos"
       role="alert"
       class="mt-3 rounded-lg border p-3 text-xs leading-relaxed"
       :class="isDark ? 'border-red-900/60 bg-red-950/40 text-red-200' : 'border-red-200 bg-red-50 text-red-800'"
     >
       <i class="pi pi-exclamation-triangle mr-1" aria-hidden="true"></i>
-      {{ clienteSeleccionado.vencimiento_licencia ? 'La licencia debe vencer después de hoy.' : 'El cliente no tiene una fecha de vencimiento de licencia registrada.' }}
-      No puedes continuar con la reserva. Actualiza la licencia desde Clientes.
+      {{ mensajeDocumentos }}
     </p>
   </section>
 </template>
@@ -116,6 +115,8 @@ import { documentosVigentes } from '@/utils/contratoFormatters'
 
 const props = defineProps({
   busqueda: { type: String, default: '' },
+  fechaEvaluacion: { type: String, default: '' },
+  mensajeDocumentos: { type: String, default: '' },
   clienteSeleccionado: { type: Object, default: null },
   resultados: { type: Array, default: () => [] },
   buscando: { type: Boolean, default: false },
@@ -138,7 +139,7 @@ defineEmits([
 const { isDark } = useAppTheme()
 
 function licenciaVigente(cliente) {
-  return documentosVigentes(cliente).ok
+  return documentosVigentes(cliente, props.fechaEvaluacion).ok
 }
 
 function esSeleccionado(cliente) {

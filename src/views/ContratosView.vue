@@ -15,6 +15,15 @@
       </router-link>
     </div>
 
+    <div v-if="resultadoCambio" role="status" class="rounded-2xl border p-4 mb-5 space-y-2 text-sm" :class="isDark ? 'bg-gray-900 border-gray-700 text-gray-200' : 'bg-white border-gray-200 text-gray-700'">
+      <p class="font-bold">{{ resultadoCambio.message }}</p>
+      <p>Contrato original: {{ resultadoCambio.origen.numero_contrato }} · {{ labelEstadoContrato(resultadoCambio.origen.estado_contrato) }}.
+        Continuación: {{ resultadoCambio.data.numero_contrato }} · {{ labelEstadoContrato(resultadoCambio.data.estado_contrato) }} · {{ resultadoCambio.data.vehiculo?.placa }}.</p>
+      <p>Continuación: {{ resultadoCambio.data.dias_acordados }} día(s) · Tarifa diaria: ${{ formatPrecio(resultadoCambio.data.precio_por_dia) }} · Descuento: ${{ formatPrecio(resultadoCambio.data.monto_descuento) }}.</p>
+      <p>Devolución acordada: {{ fmtFecha(resultadoCambio.data.fecha_hora_devolucion) }} · Saldo trasladado: ${{ formatPrecio(resultadoCambio.data.saldo_trasladado) }} · Pendiente: ${{ formatPrecio(saldoPendienteContrato(resultadoCambio.data)) }}.</p>
+      <p v-if="resultadoCambio.advertencia" class="text-amber-600">{{ resultadoCambio.advertencia }}</p>
+    </div>
+
     <div
       class="rounded-2xl border shadow-sm p-4 mb-5 flex flex-col sm:flex-row sm:flex-wrap gap-3"
       :class="isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'"
@@ -117,7 +126,11 @@
               class="border-b transition-colors"
               :class="isDark ? 'border-gray-800 hover:bg-gray-800/50' : 'border-gray-50 hover:bg-gray-50/80'"
             >
-              <td class="px-5 py-4 font-mono font-bold text-sm" style="color:#922b21;">{{ c.numero_contrato }}</td>
+              <td class="px-5 py-4 font-mono font-bold text-sm" style="color:#922b21;">
+                <p>{{ c.numero_contrato }}</p>
+                <p v-if="c.contrato_origen_id" class="text-xs font-normal">Continuación de {{ numeroContratoRelacionado(c.contrato_origen_id, c.info_registro?.continuacion_de?.numero_contrato) }}</p>
+                <p v-if="c.info_registro?.continuado_en" class="text-xs font-normal">Continúa en {{ numeroContratoRelacionado(c.info_registro.continuado_en.contrato_id, c.info_registro.continuado_en.numero_contrato) }}</p>
+              </td>
               <td class="px-5 py-4">
                 <p class="font-semibold" :class="isDark ? 'text-gray-200' : 'text-gray-800'">{{ clienteContrato(c)?.nombre || '-' }}</p>
                 <p class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">{{ clienteContrato(c)?.dui || '' }}</p>
@@ -295,6 +308,7 @@ import {
   totalFinalContrato,
   montoExtrasContrato,
   montoPagadoContrato,
+  saldoPendienteContrato,
   fechaLocalISO,
 } from '@/utils/contratoFormatters'
 import { fechaHoyLocal, sumarDiasISO } from '@/utils/reservaFormatters'
@@ -311,6 +325,7 @@ const contratoCambio = ref(null)
 const cambiandoVehiculo = ref(false)
 const erroresCambio = ref({})
 const errorCambio = ref('')
+const resultadoCambio = ref(null)
 const filtroEstado = ref('')
 const filtroPago = ref('')
 const filtroDevolucion = ref('')
@@ -421,6 +436,10 @@ function cambiarPagina(page) {
   paginaActual.value = page
 }
 
+function numeroContratoRelacionado(id, numero) {
+  return numero || store.contratos.find((c) => Number(c.id) === Number(id))?.numero_contrato || `#${id}`
+}
+
 function clienteContrato(contrato) {
   const embebido = contrato?.cliente || contrato?.reserva?.cliente || null
   if (embebido) return embebido
@@ -498,6 +517,7 @@ async function verContrato(c) {
 }
 
 async function anularContrato(c) {
+  if (!authStore.isAdmin || c.contrato_origen_id || c.estado_contrato !== 'ACTIVO') return
   const { value: motivo, isConfirmed } = await Swal.fire({
     icon: 'warning',
     title: `¿Anular contrato ${c.numero_contrato}?`,
@@ -552,7 +572,7 @@ function accionesExtra(c) {
   const acciones = []
   if (puedeRegistrarPago(c)) acciones.push({ id: 'pago', texto: 'Registrar pago', icono: 'pi-dollar', ejecutar: () => irAPagos(c) })
   acciones.push({ id: 'vehiculo', texto: 'Cambiar vehículo', icono: 'pi-sync', ejecutar: () => abrirCambioVehiculo(c) })
-  if (authStore.isAdmin) acciones.push({ id: 'anular', texto: 'Anular contrato', icono: 'pi-ban', peligro: true, ejecutar: () => anularContrato(c) })
+  if (authStore.isAdmin && !c.contrato_origen_id) acciones.push({ id: 'anular', texto: 'Anular contrato', icono: 'pi-ban', peligro: true, ejecutar: () => anularContrato(c) })
   return acciones
 }
 
@@ -603,15 +623,14 @@ async function abrirCambioVehiculo(c) {
 }
 
 async function confirmarCambioVehiculo(datos) {
-  if (!contratoCambio.value) return
+  if (!contratoCambio.value || cambiandoVehiculo.value) return
   cambiandoVehiculo.value = true
   erroresCambio.value = {}
   errorCambio.value = ''
   try {
-    const actualizado = await store.cambiarVehiculo(contratoCambio.value.id, datos)
+    resultadoCambio.value = await store.cambiarVehiculo(contratoCambio.value.id, datos)
     contratoCambio.value = null
-    toastSuccess('Vehículo cambiado', `${actualizado.numero_contrato} · ${actualizado.vehiculo?.placa || ''}`)
-    await store.fetchContratos()
+    toastSuccess('Continuación creada', resultadoCambio.value.message)
   } catch (e) {
     erroresCambio.value = e.response?.data?.errors || {}
     errorCambio.value = e.response?.data?.errors ? '' : (e.response?.data?.message || 'No se pudo cambiar el vehículo.')

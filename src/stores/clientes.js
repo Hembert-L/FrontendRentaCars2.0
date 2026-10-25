@@ -105,6 +105,18 @@ export const useClientesStore = defineStore('clientes', () => {
     }
   }
 
+  async function completarDocumentos(cliente) {
+    if (!cliente) throw new Error('Selecciona un cliente para comprobar sus documentos.')
+    if (cliente.vencimiento_dui !== undefined && cliente.vencimiento_licencia !== undefined) return cliente
+    if (!cliente.id) throw new Error('No se pudo identificar al cliente para consultar sus documentos.')
+    const res = await api.get(`/admin/clientes/${cliente.id}`)
+    const completo = normalizeCliente({ ...cliente, ...res.data.data })
+    if (completo.vencimiento_dui === undefined || completo.vencimiento_licencia === undefined) {
+      throw new Error('El detalle del cliente no incluye todos los vencimientos documentales.')
+    }
+    return completo
+  }
+
   async function fetchDepartamentos() {
     if (departamentos.value.length) return departamentos.value
 
@@ -221,6 +233,7 @@ export const useClientesStore = defineStore('clientes', () => {
     fetchClientes,
     fetchClientesFiltrados,
     fetchDepartamentos,
+    completarDocumentos,
     fetchMunicipios,
     buscarClientes,
     crear,

@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import api from '@/services/api'
 import { fetchAllPaginated } from '@/utils/apiPagination'
+import { montoPagadoContrato } from '@/utils/contratoFormatters'
 
 export const useContratosStore = defineStore('contratos', () => {
   const contratos = ref([])
@@ -10,7 +11,7 @@ export const useContratosStore = defineStore('contratos', () => {
   const advertenciaEstetica = ref(null)
   const detallesEsteticos = ref([])
 
-  async function fetchContratos(params = {}) {
+  async function fetchContratos(params = {}, { lanzarError = false } = {}) {
     loading.value = true
     error.value   = null
     try {
@@ -18,18 +19,46 @@ export const useContratosStore = defineStore('contratos', () => {
         (requestParams) => api.get('/admin/contratos', { params: requestParams }),
         params,
       )
-      contratos.value = items
-    } catch {
+      // El listado no incluye pagos. Recuperar el historial una vez para todas las filas.
+      const { items: pagos } = await fetchAllPaginated((params) => api.get('/admin/pagos', { params }))
+      const consultas = new Map()
+      const completos = await Promise.all(items.map((contrato) => completarSaldoContrato({
+        ...contrato,
+        pagos: pagos.filter((p) => Number(p.contrato_id || p.contrato?.id) === Number(contrato.id)),
+      }, items, consultas)))
+      contratos.value = completos
+      return completos
+    } catch (e) {
       error.value = 'Error al cargar contratos.'
       contratos.value = []
+      if (lanzarError) throw e
     } finally {
       loading.value = false
     }
   }
 
+  async function completarSaldoContrato(contrato, relacionados = [], consultas = new Map()) {
+    const continuacionId = contrato.info_registro?.continuado_en?.contrato_id
+    let continuacion = contrato.continuacion
+      || relacionados.find((c) => Number(c.contrato_origen_id) === Number(contrato.id))
+    if (continuacion?.saldo_trasladado == null && (continuacionId || continuacion?.id)) {
+      const id = continuacionId || continuacion.id
+      // Caché limitada a esta consulta; las recargas vuelven a consultar al servidor.
+      if (!consultas.has(String(id))) {
+        consultas.set(String(id), api.get(`/admin/contratos/${id}`).then((res) => res.data.data))
+      }
+      continuacion = await consultas.get(String(id))
+      if (continuacion?.saldo_trasladado == null) {
+        throw new Error('No se pudo obtener el saldo trasladado a la continuación.')
+      }
+    }
+    const completo = { ...contrato, continuacion: continuacion || null }
+    return { ...completo, monto_pagado: montoPagadoContrato(completo) }
+  }
+
   async function fetchContrato(id) {
     const res = await api.get(`/admin/contratos/${id}`)
-    return res.data.data
+    return completarSaldoContrato(res.data.data)
   }
 
   async function crear(form) {
@@ -127,11 +156,12 @@ export const useContratosStore = defineStore('contratos', () => {
 
   async function actualizarCargo(id, datos) {
     const res = await api.put(`/admin/cargos-adicionales/${id}`, datos)
-    return res.data.data
+    return res.data
   }
 
   async function eliminarCargo(id) {
-    await api.delete(`/admin/cargos-adicionales/${id}`)
+    const res = await api.delete(`/admin/cargos-adicionales/${id}`)
+    return res.data
   }
 
   async function actualizarIncidencia(id, datos) {
@@ -146,18 +176,46 @@ export const useContratosStore = defineStore('contratos', () => {
 
   // solo admin, y el contrato no debe tener pagos, cargos ni incidencias
   async function anular(id, motivo) {
+    const contrato = contratos.value.find((c) => Number(c.id) === Number(id)) || await fetchContrato(id)
+    if (contrato.contrato_origen_id) {
+      throw new Error('No se puede anular un contrato de continuación por cambio de vehículo.')
+    }
     const res = await api.patch(`/admin/contratos/${id}/anular`, { motivo })
     const idx = contratos.value.findIndex((c) => c.id === Number(id))
     if (idx !== -1) contratos.value[idx] = { ...contratos.value[idx], ...res.data.data }
     return res.data.data
   }
 
-  // el precio no cambia, el carro anterior pasa a en proceso
+  // El POST crea otra identidad; los importes y días proceden del servidor.
   async function cambiarVehiculo(id, datos) {
     const res = await api.post(`/admin/contratos/${id}/cambiar-vehiculo`, datos)
-    const idx = contratos.value.findIndex((c) => c.id === Number(id))
-    if (idx !== -1) contratos.value[idx] = { ...contratos.value[idx], ...res.data.data }
-    return res.data.data
+    const nuevo = res.data.data
+    const continuacion = await completarSaldoContrato({ ...nuevo, pagos: [] })
+    const anterior = contratos.value.find((c) => Number(c.id) === Number(id))
+    let origen
+    let advertencia = ''
+    try {
+      const detalle = await api.get(`/admin/contratos/${id}`)
+      origen = await completarSaldoContrato(detalle.data.data, [continuacion])
+    } catch {
+      // El POST ya fue confirmado. Un fallo de lectura no debe ofrecer repetirlo.
+      origen = {
+        ...anterior,
+        ...nuevo.contrato_origen,
+        id: Number(id),
+        estado_contrato: 'FINALIZADO',
+        continuacion,
+        info_registro: {
+          ...anterior?.info_registro,
+          continuado_en: { contrato_id: nuevo.id, numero_contrato: nuevo.numero_contrato },
+        },
+      }
+      origen.monto_pagado = montoPagadoContrato(origen)
+      advertencia = 'El cambio se registró. No se pudo recargar el detalle del contrato original; actualiza el listado para consultar todos sus importes.'
+    }
+    const ids = [Number(id), Number(continuacion.id)]
+    contratos.value = [origen, continuacion, ...contratos.value.filter((c) => !ids.includes(Number(c.id)))]
+    return { data: continuacion, origen, message: res.data.message, advertencia }
   }
 
   return {

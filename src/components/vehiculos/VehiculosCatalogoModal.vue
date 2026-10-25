@@ -54,7 +54,7 @@
 
             <div v-if="tipo === 'categoria'">
               <label class="field-label">Precio por día ($)</label>
-              <input v-model="form.precio_dia" type="number" min="1" step="0.01" class="field-input" :class="inputClass(errors.precio_dia)" placeholder="25.00" />
+              <input v-model="form.precio_dia" type="number" min="1" max="9999.99" step="0.01" class="field-input" :class="inputClass(errors.precio_dia)" placeholder="25.00" />
               <p v-if="errors.precio_dia" class="field-error">{{ errors.precio_dia }}</p>
             </div>
 
@@ -324,6 +324,9 @@ function validar() {
       ok = false
     } else if (tieneMasDeDosDecimales) {
       errors.precio_dia = 'Usa máximo dos decimales.'
+      ok = false
+    } else if (precio > 9999.99) {
+      errors.precio_dia = 'El precio por día no puede ser mayor a $9,999.99.'
       ok = false
     } else if (categoriasExistentes.value.some((c) => Number(c.precio_dia) === precio)) {
       errors.precio_dia = 'Ya existe una categoría con ese precio por día.'

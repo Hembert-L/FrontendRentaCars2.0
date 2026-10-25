@@ -43,12 +43,16 @@
         <span class="wizard-step-label">{{ s.titulo }}</span>
       </button>
     </nav>
+        <p v-if="mensajeDocumentos" role="alert" class="text-sm p-3" style="color:#c0392b;">{{ mensajeDocumentos }}</p>
+        <button v-if="errorDocumentos" type="button" class="text-sm underline" @click="reintentarDocumentos">Reintentar comprobación documental</button>
         <Transition name="slide-fade" mode="out-in">
           <div :key="paso" class="wizard-panel">
             <ContratoClienteSection
               v-if="paso === 1"
               ref="clienteRef"
               v-model="cliente"
+              :estado-documentos="estadoDocumentos"
+              :mensaje-documentos="mensajeDocumentos"
               :cargando-reservas="cargandoReservasCliente"
               :sin-reserva="sinReservaDisponible"
               :reservas="reservasCliente"
@@ -77,10 +81,12 @@
               v-model:nivel-combustible="nivelCombustible"
               :dias="dias"
               :precio-dia="precioDia"
+              :porcentaje-maximo="porcentajeDescuentoMaximo"
             />
           </div>
         </Transition>
 
+        <p v-if="porcentajeDescuentoMaximo === null" role="alert" class="wizard-error">No se pudo determinar el límite de descuento. Contacta al administrador.</p>
         <p v-if="error" class="wizard-error">{{ error }}</p>
         <p v-if="mensajeContratoActivo" class="wizard-error">{{ mensajeContratoActivo }}</p>
         <p v-if="mensajeReservaTraslapada" class="wizard-error">{{ mensajeReservaTraslapada }}</p>
@@ -148,7 +154,9 @@ import ContratoPdfPreview from '@/components/contratos/ContratoPdfPreview.vue'
 import { useContratosStore } from '@/stores/contratos'
 import { useReservasStore } from '@/stores/reservas'
 import { useAppTheme } from '@/composables/useAppTheme'
-import { calcularDias, documentosVigentes, reservaChocaConContratoDirecto, errorDescuentoContrato } from '@/utils/contratoFormatters'
+import { porcentajeDescuentoMaximo } from '@/utils/descuentoConfig'
+import { useDocumentosCliente } from '@/composables/useDocumentosCliente'
+import { calcularDias, reservaChocaConContratoDirecto, errorDescuentoContrato } from '@/utils/contratoFormatters'
 import { fechaHoyLocal, formatFecha } from '@/utils/reservaFormatters'
 import { pasaFechaMaxima, mensajeFechaMaxima } from '@/utils/rangoFechas'
 import { toastSuccess } from '@/utils/toast'
@@ -266,7 +274,7 @@ const mensajeFechaDevolucion = computed(() =>
 )
 const precioDia = computed(() => Number(vehiculoSel.value?.categoria?.precio_dia || 0))
 const totalEstimado = computed(() => Math.max(0, dias.value * precioDia.value - descuento.value))
-const docsOk = computed(() => documentosVigentes(cliente.value).ok)
+const { ok: docsOk, estado: estadoDocumentos, mensaje: mensajeDocumentos, error: errorDocumentos, reintentar: reintentarDocumentos } = useDocumentosCliente(() => cliente.value, () => fechaDevolucion.value)
 const esDesdeReserva = computed(() => !!reservaId.value || !!reservaOrigen.value)
 
 const paso1Ok = computed(() =>
@@ -286,7 +294,7 @@ const paso2Ok = computed(() =>
   !mensajeDiaEntrega.value &&
   !mensajeFechaDevolucion.value,
 )
-const descuentoValido = computed(() => !errorDescuentoContrato(descuento.value, dias.value * precioDia.value))
+const descuentoValido = computed(() => !errorDescuentoContrato(descuento.value, dias.value * precioDia.value, porcentajeDescuentoMaximo))
 const puedeGenerar = computed(() => paso1Ok.value && paso2Ok.value && dias.value > 0 && descuentoValido.value)
 
 const pasoMaximo = computed(() => {

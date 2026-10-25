@@ -505,10 +505,10 @@
                         ? 'border-red-800 bg-red-950/40 text-red-300 hover:bg-red-950/70 hover:border-red-700'
                         : 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100'
                     "
-                    :disabled="vehiculoEnUso(item)"
+                    :disabled="bajaVehiculoBloqueada(item)"
                     :title="
                       activeTab === 'vehiculos'
-                        ? (vehiculoEnUso(item)
+                        ? (bajaVehiculoBloqueada(item)
                             ? 'No se puede enviar fuera de servicio mientras está ' + labelEstadoTabla(item.estado).toLowerCase()
                             : 'Enviar fuera de servicio')
                         : `Eliminar ${tabActiva.label.slice(0, -1).toLowerCase()}`
@@ -1164,6 +1164,7 @@ function validarPrecioDia(value) {
   const precio = Number(texto);
   if (!texto || Number.isNaN(precio) || precio < 1) return "El precio debe ser de $1.00 o más";
   if (!/^\d+(\.\d{1,2})?$/.test(texto)) return "Usa máximo dos decimales";
+  if (precio > 9999.99) return "El precio por día no puede ser mayor a $9,999.99";
   return null;
 }
 
@@ -1246,6 +1247,10 @@ function vehiculoFueraServicio(item) {
 const ESTADOS_VEHICULO_EN_USO = ["RENTADO"];
 function vehiculoEnUso(item) {
   return activeTab.value === "vehiculos" && ESTADOS_VEHICULO_EN_USO.includes(item?.estado);
+}
+
+function bajaVehiculoBloqueada(item) {
+  return vehiculoEnUso(item) || (activeTab.value === "vehiculos" && item?.estado === "MANTENIMIENTO");
 }
 
 function nombreSeguroVehiculo(seguro) {
@@ -1414,7 +1419,7 @@ async function accionEditar(item) {
         title: "Editar categoría",
         html: `
         <input id="swal-cat-nombre" class="swal2-input" placeholder="Nombre" value="${item.nombre ?? ""}">
-        <input id="swal-cat-precio" type="number" min="1" step="0.01" class="swal2-input" placeholder="Precio por día" value="${item.precio_dia ?? ""}">
+        <input id="swal-cat-precio" type="number" min="1" max="9999.99" step="0.01" class="swal2-input" placeholder="Precio por día" value="${item.precio_dia ?? ""}">
         <input id="swal-cat-max" type="number" min="1" max="15" step="1" class="swal2-input" placeholder="Máximo de pasajeros" value="${item.capacidad_maxima ?? ""}">
       `,
         showCancelButton: true,
@@ -1581,7 +1586,7 @@ async function accionRestaurar(item) {
 }
 async function accionEliminar(item) {
   if (!puedeEscribirTab.value || !["vehiculos", "marcas", "categorias", "propietarios"].includes(activeTab.value)) return;
-  if (activeTab.value === "vehiculos" && vehiculoEnUso(item)) {
+  if (bajaVehiculoBloqueada(item)) {
     await Swal.fire({
       icon: "info",
       title: "No se puede enviar fuera de servicio",

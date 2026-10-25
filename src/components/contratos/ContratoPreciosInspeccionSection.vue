@@ -18,12 +18,14 @@
             :value="descuento"
             type="number"
             min="0"
-            :max="subtotal"
+            :max="maximoDescuento"
+            :disabled="maximoDescuento === null"
             step="0.01"
             class="field-input mt-1 w-full field-input--plain"
             :class="errorDescuento ? 'field-input--error' : ''"
             @input="$emit('update:descuento', Number($event.target.value) || 0)"
           />
+          <span v-if="maximoDescuento !== null" class="text-[11px] mt-1 block">Máximo {{ porcentajeMaximo }}%: ${{ formatPrecio(maximoDescuento) }}</span>
           <span v-if="errorDescuento" class="text-[11px] font-semibold mt-1 block" style="color:#c0392b;">{{ errorDescuento }}</span>
         </div>
       </div>
@@ -83,12 +85,13 @@
 <script setup>
 import { computed } from 'vue'
 import { useAppTheme } from '@/composables/useAppTheme'
-import { NIVELES_COMBUSTIBLE, formatPrecio, nivelCombustiblePct, errorDescuentoContrato } from '@/utils/contratoFormatters'
+import { NIVELES_COMBUSTIBLE, formatPrecio, nivelCombustiblePct, errorDescuentoContrato, maximoDescuentoContrato } from '@/utils/contratoFormatters'
 
 const props = defineProps({
   dias:                 { type: Number, default: 0 },
   precioDia:            { type: Number, default: 0 },
   descuento:            { type: Number, default: 0 },
+  porcentajeMaximo:      { type: Number, default: null },
   nivelCombustible:     { type: String, default: '1/2' },
 })
 
@@ -98,7 +101,8 @@ const { isDark } = useAppTheme()
 const shellClass = computed(() => isDark.value ? 'form-section-dark bg-gray-900 border-gray-800' : 'form-section-light bg-white border-gray-100')
 const subtotal = computed(() => props.dias * props.precioDia)
 const total = computed(() => Math.max(0, subtotal.value - props.descuento))
-const errorDescuento = computed(() => errorDescuentoContrato(props.descuento, subtotal.value))
+const maximoDescuento = computed(() => maximoDescuentoContrato(subtotal.value, props.porcentajeMaximo))
+const errorDescuento = computed(() => errorDescuentoContrato(props.descuento, subtotal.value, props.porcentajeMaximo))
 const nivelPct = computed(() => nivelCombustiblePct(props.nivelCombustible))
 const nivelLabel = computed(() => NIVELES_COMBUSTIBLE.find((n) => n.value === props.nivelCombustible)?.label || props.nivelCombustible)
 const fuelLevelClass = computed(() => {
