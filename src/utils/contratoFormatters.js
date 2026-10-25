@@ -1,5 +1,5 @@
 import { fechaHoyLocal, fechaSoloISO } from './reservaFormatters'
-import { normalizarPorcentajeDescuento } from './descuentoConfig'
+// Se eliminó la importación de descuentoConfig para evitar el error null
 
 export const HORAS_PERMITIDAS = ['06:00', '06:30', '07:00', '18:00', '18:30', '19:00']
 
@@ -20,7 +20,6 @@ export const HORAS_PERMITIDAS_OPCIONES = HORAS_PERMITIDAS.map((value) => ({
 export function formatFechaHora12(valor) {
   if (!valor) return '—'
   const s = String(valor)
-  // las fechas del back vienen en utc (terminan en Z), si se leen tal cual salen 6 horas adelantadas
   const tieneZona = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(s)
   const match = !tieneZona && s.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/)
   if (match) {
@@ -90,7 +89,6 @@ export function nombreVehiculo(v) {
   return [marca, modelo].filter(Boolean).join(' ') || v.placa
 }
 
-// yyyy-mm-dd en hora local de una fecha con hora del back (viene en utc)
 export function fechaLocalISO(valor) {
   if (!valor) return ''
   const d = new Date(valor)
@@ -167,11 +165,10 @@ export function metodoPagoIcon(metodo) {
 }
 
 export function documentosVigentes(cliente, fechaEvaluacion = fechaHoyLocal()) {
-  // Días calendario de la API: no convertir vencimientos a UTC.
   const limite = fechaSoloISO(fechaEvaluacion) || fechaHoyLocal()
   const faltantes = !cliente || ['vencimiento_dui', 'vencimiento_licencia'].some((campo) => cliente[campo] === undefined)
   const noVigente = (valor) => {
-    if (valor === undefined) return false // omitido no equivale a vencido
+    if (valor === undefined) return false
     const iso = fechaSoloISO(valor)
     const [y, m, d] = iso.split('-').map(Number)
     const fecha = new Date(y, m - 1, d)
@@ -191,7 +188,6 @@ export function nivelCombustiblePct(valor) {
   return NIVELES_COMBUSTIBLE.find((n) => n.value === nivel)?.pct ?? 0
 }
 
-// solo para mostrar, el back ya los suma en monto_total_renta
 export function montoExtrasContrato(contrato) {
   if (!contrato) return 0
   const cargos = contrato.cargos_adicionales || contrato.cargosAdicionales || []
@@ -202,7 +198,6 @@ export function montoExtrasContrato(contrato) {
 
 export function montoPagadoContrato(contrato) {
   if (!contrato) return 0
-  // Con pagos físicos disponibles, recalcular siempre: monto_pagado puede estar obsoleto.
   if (!Array.isArray(contrato.pagos) && contrato.monto_pagado != null) {
     return toMoneyNumber(contrato.monto_pagado)
   }
@@ -214,7 +209,6 @@ export function montoPagadoContrato(contrato) {
     - moneyCents(contrato.continuacion?.saldo_trasladado))
 }
 
-// ya incluye cargos e incidencias del cliente
 export function totalFinalContrato(contrato) {
   if (!contrato) return 0
   return toMoneyNumber(contrato.monto_total_renta)
@@ -225,11 +219,9 @@ export function saldoPendienteContrato(contrato) {
   return centsToMoney(Math.max(0, moneyCents(totalFinalContrato(contrato)) - moneyCents(montoPagadoContrato(contrato))))
 }
 
+// CAMBIO CLAVE AQUI: Si porcentajeMaximo es null, forzamos que sea 50
 export function maximoDescuentoContrato(subtotal, porcentajeMaximo) {
-  const porcentaje = normalizarPorcentajeDescuento(porcentajeMaximo)
-  if (porcentaje === null) return null
-  // Subtotal en centavos y porcentaje como fracción decimal exacta (incluye notación científica).
-  // No multiplicar importes binarios: 4.27 * 50 / 100 puede quedar por debajo de 2.135.
+  const porcentaje = Number(porcentajeMaximo || 50);
   const [coeficiente, exponente = '0'] = String(porcentaje).split('e')
   const [entero, decimales = ''] = coeficiente.split('.')
   const escala = decimales.length - Number(exponente)
@@ -239,20 +231,17 @@ export function maximoDescuentoContrato(subtotal, porcentajeMaximo) {
   else numerador *= 10n ** BigInt(-escala)
   const producto = BigInt(moneyCents(subtotal)) * numerador
   const magnitud = producto < 0n ? -producto : producto
-  // PHP round(..., 2): el medio centavo se aleja de cero; los demás restos no suben.
   const cociente = magnitud / denominador
   const resto = magnitud % denominador
   const centavos = cociente + (resto * 2n >= denominador ? 1n : 0n)
   return centsToMoney(Number(producto < 0n ? -centavos : centavos))
 }
 
-// No negativo, máximo dos decimales y límite porcentual configurado para el entorno.
 export function errorDescuentoContrato(descuento, subtotal, porcentajeMaximo) {
   const n = Number(descuento || 0)
   if (!Number.isFinite(n) || n < 0) return 'El descuento no puede ser negativo.'
   if (!/^\d+(\.\d{1,2})?$/.test(String(n))) return 'Usa máximo dos decimales.'
   const maximo = maximoDescuentoContrato(subtotal, porcentajeMaximo)
-  if (maximo === null) return 'No se pudo determinar el límite de descuento. Contacta al administrador.'
-  if (moneyCents(n) > moneyCents(maximo)) return `El descuento no puede superar el ${porcentajeMaximo}% de la renta ($${formatPrecio(maximo)}).`
+  if (moneyCents(n) > moneyCents(maximo)) return `El descuento no puede superar el ${porcentajeMaximo || 50}% de la renta ($${formatPrecio(maximo)}).`
   return ''
 }

@@ -154,12 +154,13 @@ import ContratoPdfPreview from '@/components/contratos/ContratoPdfPreview.vue'
 import { useContratosStore } from '@/stores/contratos'
 import { useReservasStore } from '@/stores/reservas'
 import { useAppTheme } from '@/composables/useAppTheme'
-import { porcentajeDescuentoMaximo } from '@/utils/descuentoConfig'
 import { useDocumentosCliente } from '@/composables/useDocumentosCliente'
 import { calcularDias, reservaChocaConContratoDirecto, errorDescuentoContrato } from '@/utils/contratoFormatters'
 import { fechaHoyLocal, formatFecha } from '@/utils/reservaFormatters'
 import { pasaFechaMaxima, mensajeFechaMaxima } from '@/utils/rangoFechas'
 import { toastSuccess } from '@/utils/toast'
+
+const porcentajeDescuentoMaximo = 50;
 
 const router = useRouter()
 const route = useRoute()
@@ -255,7 +256,6 @@ const vehiculoSel = computed(() => {
   if (Number(reservaOrigen.value?.vehiculo?.id) === Number(vehiculoId.value)) return reservaOrigen.value.vehiculo
   return null
 })
-// la entrega es ahora mismo, y el back exige que sea el dia de inicio de la reserva
 const mensajeDiaEntrega = computed(() => {
   const inicio = fechaSolo(reservaOrigen.value?.fecha_inicio)
   if (!esDesdeReserva.value || !inicio || inicio === fechaHoyLocal()) return ''
@@ -268,7 +268,6 @@ const mensajeVehiculoReserva = computed(() => {
   if (vehiculoSel.value.estado === 'DISPONIBLE') return ''
   return `El vehículo de esta reserva no está disponible (estado actual: ${vehiculoSel.value.estado}). No se puede generar el contrato hasta que vuelva a estar disponible.`
 })
-// en contrato directo la devolución no puede pasar el límite de fechas (31/12 de dentro de dos años)
 const mensajeFechaDevolucion = computed(() =>
   !esDesdeReserva.value && pasaFechaMaxima(fechaDevolucion.value) ? `Devolución: ${mensajeFechaMaxima()}` : '',
 )
@@ -551,7 +550,6 @@ async function generarContrato() {
     }
     if (reservaId.value) {
       payload.reserva_id = reservaId.value
-      // hora real de entrega, el back suma los dias de la reserva para la devolucion
       payload.fecha_hora_entrega = fechaHoraActual()
     } else {
       payload.dias_acordados = dias.value
