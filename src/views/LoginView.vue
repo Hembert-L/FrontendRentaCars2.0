@@ -22,7 +22,7 @@
           class="login-logo login-logo--panel"
         />
         <p class="login-brand-text">
-          El Guayabo · Admin
+          El Guayabo
         </p>
       </div>
 
