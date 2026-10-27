@@ -203,6 +203,7 @@
               v-model="cargo.tipo_cargo"
               :disabled="operacionEnCurso"
               class="cierre-input cierre-input--sm cierre-input--type"
+              @change="alCambiarTipoCargo(cargo)"
             >
               <option value="" disabled>Selecciona tipo</option>
               <option v-for="tipo in TIPOS_CARGO_EDITABLES" :key="tipo.value" :value="tipo.value">{{ tipo.label }}</option>
@@ -215,7 +216,7 @@
             />
             <input
               v-model.number="cargo.monto"
-              :disabled="operacionEnCurso"
+              :disabled="operacionEnCurso || cargo.tipo_cargo === 'DIA EXTRA'"
               type="number"
               min="0"
               class="cierre-input cierre-input--sm cierre-input--amount"
@@ -759,6 +760,12 @@ function agregarCargoNuevo(tipo = "", concepto = "", monto = 0) {
   cargos.value.unshift({ concepto, monto, tipo_cargo: tipoCargo });
 }
 
+function alCambiarTipoCargo(cargo) {
+  if (cargo.tipo_cargo !== "DIA EXTRA") return;
+  cargo.monto = Number(contrato.value?.precio_por_dia || 0);
+  if (!cargo.concepto) cargo.concepto = "Día extra";
+}
+
 async function confirmarSalidaConCargos() {
   if (operacionEnCurso.value) return false;
   if (!tieneCargosSinGuardar.value && !tieneIncidenciasSinGuardar.value) return true;
@@ -1021,18 +1028,22 @@ async function ejecutarCorreccion(accion, mensajeExito) {
 }
 
 async function editarCargoRegistrado(cargo) {
-  const tipos = cargo.tipo_cargo === "RETRASO"
-    ? [{ value: "RETRASO", label: "Retraso" }, ...TIPOS_CARGO_EDITABLES]
-    : TIPOS_CARGO_EDITABLES;
+  const esDiaExtra = cargo.tipo_cargo === "DIA EXTRA";
+  const tipos = esDiaExtra
+    ? [{ value: "DIA EXTRA", label: "Día extra" }]
+    : (cargo.tipo_cargo === "RETRASO"
+        ? [{ value: "RETRASO", label: "Retraso" }, ...TIPOS_CARGO_EDITABLES]
+        : TIPOS_CARGO_EDITABLES
+      ).filter((t) => t.value !== "DIA EXTRA");
   const { value: datos } = await Swal.fire({
     title: "Editar cargo",
     html: `
       <label style="${estiloEtiquetaSwal}">Tipo</label>
-      <select id="swal-cargo-tipo" style="${estiloCampoSwal}">${opcionesHtml(tipos, cargo.tipo_cargo)}</select>
+      <select id="swal-cargo-tipo" style="${estiloCampoSwal}" ${esDiaExtra ? "disabled" : ""}>${opcionesHtml(tipos, cargo.tipo_cargo)}</select>
       <label style="${estiloEtiquetaSwal}">Concepto</label>
       <input id="swal-cargo-concepto" style="${estiloCampoSwal}" maxlength="255" value="${escaparHtml(cargo.concepto)}" />
       <label style="${estiloEtiquetaSwal}">Monto ($)</label>
-      <input id="swal-cargo-monto" type="number" min="0.01" step="0.01" style="${estiloCampoSwal}" value="${escaparHtml(cargo.monto)}" />`,
+      <input id="swal-cargo-monto" type="number" min="0.01" step="0.01" style="${estiloCampoSwal}" value="${escaparHtml(cargo.monto)}" ${esDiaExtra ? "disabled" : ""} />`,
     focusConfirm: false,
     showCancelButton: true,
     confirmButtonText: "Guardar cambios",
