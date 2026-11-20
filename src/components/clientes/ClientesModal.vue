@@ -49,7 +49,61 @@
               <p v-if="errors.nombre" class="field-error">{{ errors.nombre }}</p>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="field-label">Tipo de documento</label>
+              <div class="grid grid-cols-2 gap-2">
+                <button
+                  v-for="opcion in tiposDocumento"
+                  :key="opcion.value"
+                  type="button"
+                  class="doc-tipo-btn"
+                  :class="[isDark ? 'dark' : 'light', form.tipo_documento === opcion.value ? 'activo' : '']"
+                  @click="cambiarTipoDocumento(opcion.value)"
+                >
+                  <i :class="opcion.icon"></i>{{ opcion.label }}
+                </button>
+              </div>
+              <p v-if="errors.documento" class="field-error">{{ errors.documento }}</p>
+            </div>
+
+            <div v-if="form.tipo_documento === 'PASAPORTE'" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="field-label">Pasaporte</label>
+                <div class="relative">
+                  <i class="pi pi-id-card input-icon"></i>
+                  <input
+                    :value="form.pasaporte"
+                    type="text"
+                    placeholder="AB1234567"
+                    maxlength="30"
+                    class="field-input"
+                    :class="errors.pasaporte ? 'error' : ''"
+                    @input="onPasaporteInput"
+                  />
+                </div>
+                <p v-if="errors.pasaporte" class="field-error">{{ errors.pasaporte }}</p>
+              </div>
+              <div>
+                <label class="field-label">País del pasaporte</label>
+                <div class="relative">
+                  <i class="pi pi-globe input-icon"></i>
+                  <select
+                    v-model="form.pais_id"
+                    class="field-input field-select"
+                    :class="errors.pais_id ? 'error' : ''"
+                    :disabled="cargandoPaises"
+                  >
+                    <option value="">{{ cargandoPaises ? 'Cargando...' : 'Selecciona país' }}</option>
+                    <option v-for="pais in paises" :key="pais.id" :value="String(pais.id)">
+                      {{ pais.nombre }}
+                    </option>
+                  </select>
+                </div>
+                <p v-if="errors.pais_id" class="field-error">{{ errors.pais_id }}</p>
+              </div>
+            </div>
+
+            <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label class="field-label">DUI</label>
                 <div class="relative">
@@ -89,13 +143,14 @@
                 <div class="relative">
                   <i class="pi pi-car input-icon"></i>
                   <input
-                    v-model.trim="form.numero_licencia"
+                    :value="form.numero_licencia"
                     type="text"
-                    inputmode="numeric"
-                    placeholder="10000001"
-                    maxlength="14"
+                    :inputmode="form.tipo_documento === 'DUI' ? 'numeric' : 'text'"
+                    :placeholder="form.tipo_documento === 'DUI' ? '123456789' : 'Licencia del país de origen'"
+                    maxlength="30"
                     class="field-input"
                     :class="errors.numero_licencia ? 'error' : ''"
+                    @input="onLicenciaInput"
                   />
                 </div>
                 <p v-if="errors.numero_licencia" class="field-error">{{ errors.numero_licencia }}</p>
@@ -126,7 +181,7 @@
               />
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div v-if="form.tipo_documento === 'DUI'" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label class="field-label">Departamento</label>
                 <div class="relative">
@@ -187,7 +242,7 @@
               </button>
               <button
                 type="submit"
-                :disabled="guardando || cargandoDepartamentos || cargandoMunicipios"
+                :disabled="guardando || cargandoDepartamentos || cargandoMunicipios || cargandoPaises"
                 class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white font-bold text-sm transition-all hover:opacity-90 disabled:opacity-60"
                 style="background:#c0392b;"
               >
@@ -236,13 +291,23 @@ const departamentos = ref([])
 const municipios = ref([])
 const cargandoDepartamentos = ref(false)
 const cargandoMunicipios = ref(false)
+const paises = ref([])
+const cargandoPaises = ref(false)
 const inicializandoFormulario = ref(false)
+
+const tiposDocumento = [
+  { value: 'DUI', label: 'DUI (nacional)', icon: 'pi pi-id-card' },
+  { value: 'PASAPORTE', label: 'Pasaporte (extranjero)', icon: 'pi pi-globe' },
+]
 
 const form = reactive({
   id: null,
   nombre: '',
+  tipo_documento: 'DUI',
   dui: '',
   vencimiento_dui: '',
+  pasaporte: '',
+  pais_id: '',
   numero_licencia: '',
   vencimiento_licencia: '',
   telefono: '',
@@ -253,8 +318,11 @@ const form = reactive({
 
 const errors = reactive({
   nombre: '',
+  documento: '',
   dui: '',
   vencimiento_dui: '',
+  pasaporte: '',
+  pais_id: '',
   numero_licencia: '',
   vencimiento_licencia: '',
   telefono: '',
@@ -279,7 +347,7 @@ watch(() => props.visible, async (val) => {
   inicializandoFormulario.value = true
   try {
     llenarFormulario()
-    await cargarDepartamentos()
+    await Promise.all([cargarDepartamentos(), cargarPaises()])
     if (form.departamento_id) await cargarMunicipios(form.departamento_id, false)
   } finally {
     inicializandoFormulario.value = false
@@ -315,8 +383,11 @@ function llenarFormulario() {
     Object.assign(form, {
       id: cliente.id,
       nombre: cliente.nombre || '',
+      tipo_documento: !cliente.dui && cliente.pasaporte ? 'PASAPORTE' : 'DUI',
       dui: cliente.dui || '',
       vencimiento_dui: fechaInput(cliente.vencimiento_dui),
+      pasaporte: cliente.pasaporte || '',
+      pais_id: String(cliente.pais_id ?? cliente.pais?.id ?? ''),
       numero_licencia: cliente.numero_licencia || '',
       vencimiento_licencia: fechaInput(cliente.vencimiento_licencia),
       telefono: telefonoNormalizadoCompleto(cliente.telefono || '', detectarPaisTelefono(cliente.telefono || '')),
@@ -330,8 +401,11 @@ function llenarFormulario() {
   Object.assign(form, {
     id: null,
     nombre: '',
+    tipo_documento: 'DUI',
     dui: '',
     vencimiento_dui: '',
+    pasaporte: '',
+    pais_id: '',
     numero_licencia: '',
     vencimiento_licencia: '',
     telefono: '',
@@ -353,6 +427,31 @@ async function cargarDepartamentos() {
   }
 }
 
+async function cargarPaises() {
+  cargandoPaises.value = true
+  try {
+    paises.value = await store.fetchPaises()
+  } catch {
+    // si falla solo afecta a extranjeros
+    if (form.tipo_documento === 'PASAPORTE') globalError.value = 'No se pudieron cargar los países.'
+  } finally {
+    cargandoPaises.value = false
+  }
+}
+
+function cambiarTipoDocumento(tipo) {
+  if (form.tipo_documento === tipo) return
+  form.tipo_documento = tipo
+  errors.documento = ''
+  errors.dui = ''
+  errors.vencimiento_dui = ''
+  errors.pasaporte = ''
+  errors.pais_id = ''
+  errors.departamento_id = ''
+  errors.municipio_id = ''
+  if (tipo === 'PASAPORTE' && !paises.value.length) cargarPaises()
+}
+
 async function cargarMunicipios(departamentoId) {
   if (!departamentoId) return
   cargandoMunicipios.value = true
@@ -369,7 +468,8 @@ function validar() {
   resetErrors()
   let ok = true
   form.nombre = normalizarNombre(form.nombre)
-  form.numero_licencia = String(form.numero_licencia || '').trim()
+  form.numero_licencia = String(form.numero_licencia || '').trim().toUpperCase()
+  const esDui = form.tipo_documento === 'DUI'
 
   if (!form.nombre) { errors.nombre = 'El nombre es obligatorio.'; ok = false }
   else if (!nombreTieneFormatoValido(form.nombre)) {
@@ -379,7 +479,15 @@ function validar() {
     errors.nombre = errorNombrePersona(form.nombre)
     ok = false
   }
-  if (!form.dui) {
+  if (!esDui) {
+    const pasaporte = String(form.pasaporte || '').trim().toUpperCase()
+    form.pasaporte = pasaporte
+    if (!pasaporte) { errors.pasaporte = 'El pasaporte es obligatorio.'; ok = false }
+    else if (!/^[A-Z0-9]+$/.test(pasaporte)) { errors.pasaporte = 'El pasaporte solo puede llevar letras y números.'; ok = false }
+    else if (pasaporte.length < 5 || pasaporte.length > 30) { errors.pasaporte = 'El pasaporte debe tener entre 5 y 30 caracteres.'; ok = false }
+    else if (/^(\w)\1+$/.test(pasaporte)) { errors.pasaporte = 'Ingresa un pasaporte real, no una secuencia repetida.'; ok = false }
+    if (!form.pais_id) { errors.pais_id = 'Selecciona el país del pasaporte.'; ok = false }
+  } else if (!form.dui) {
     errors.dui = 'El DUI es obligatorio.'
     ok = false
   } else if (!duiTieneFormato(form.dui)) {
@@ -392,7 +500,9 @@ function validar() {
     errors.dui = 'El DUI no es valido. Revisa el digito final.'
     ok = false
   }
-  if (!form.vencimiento_dui) {
+  if (!esDui) {
+    // extranjero: no lleva vencimiento de dui
+  } else if (!form.vencimiento_dui) {
     errors.vencimiento_dui = 'La fecha de vencimiento del DUI es obligatoria.'
     ok = false
   } else if (!fechaPosteriorAHoy(form.vencimiento_dui)) {
@@ -405,13 +515,13 @@ function validar() {
   if (!form.numero_licencia) {
     errors.numero_licencia = 'El número de licencia es obligatorio.'
     ok = false
-  } else if (!/^\d+$/.test(form.numero_licencia)) {
-    errors.numero_licencia = 'El número de licencia solo debe contener números.'
+  } else if (!/^[A-Z0-9]+$/.test(form.numero_licencia)) {
+    errors.numero_licencia = 'El número de licencia solo puede llevar letras y números.'
     ok = false
-  } else if (![9, 14].includes(form.numero_licencia.length)) {
-    errors.numero_licencia = 'La licencia debe tener 9 dígitos (número de DUI) o 14 dígitos (NIT).'
+  } else if (form.numero_licencia.length < 5 || form.numero_licencia.length > 30) {
+    errors.numero_licencia = 'La licencia debe tener entre 5 y 30 caracteres.'
     ok = false
-  } else if (/^(\d)\1+$/.test(form.numero_licencia)) {
+  } else if (/^(\w)\1+$/.test(form.numero_licencia)) {
     errors.numero_licencia = 'Ingresa un número de licencia real, no una secuencia repetida.'
     ok = false
   }
@@ -427,22 +537,28 @@ function validar() {
   }
   const telefonoError = validarTelefonoPais(form.telefono, buscarPaisTelefono(form.pais_telefono))
   if (telefonoError) { errors.telefono = telefonoError; ok = false }
-  if (!form.departamento_id) { errors.departamento_id = 'Selecciona un departamento.'; ok = false }
-  if (!form.municipio_id) { errors.municipio_id = 'Selecciona un municipio.'; ok = false }
+  if (esDui) {
+    if (!form.departamento_id) { errors.departamento_id = 'Selecciona un departamento.'; ok = false }
+    if (!form.municipio_id) { errors.municipio_id = 'Selecciona un municipio.'; ok = false }
+  }
   return ok
 }
 
 function handleGuardar() {
   if (!validar()) return
+  const esDui = form.tipo_documento === 'DUI'
+  // se manda null al otro documento para que el back no deje los dos
   emit('guardar', {
     id: form.id,
     nombre: form.nombre.trim(),
-    dui: form.dui.trim(),
-    vencimiento_dui: form.vencimiento_dui,
+    dui: esDui ? form.dui.trim() : null,
+    vencimiento_dui: esDui ? form.vencimiento_dui : null,
+    pasaporte: esDui ? null : form.pasaporte,
+    pais_id: esDui ? null : form.pais_id,
     numero_licencia: form.numero_licencia,
     vencimiento_licencia: form.vencimiento_licencia,
     telefono: telefonoNormalizadoCompleto(form.telefono, buscarPaisTelefono(form.pais_telefono)),
-    municipio_id: form.municipio_id,
+    municipio_id: esDui ? form.municipio_id : null,
   })
 }
 
@@ -464,6 +580,16 @@ function aplicarErroresServidor(serverErrors = {}) {
   })
 
   if (primerErrorNoMapeado) globalError.value = primerErrorNoMapeado
+}
+
+function onPasaporteInput(event) {
+  form.pasaporte = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 30)
+  event.target.value = form.pasaporte
+}
+
+function onLicenciaInput(event) {
+  form.numero_licencia = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 30)
+  event.target.value = form.numero_licencia
 }
 
 function onDuiInput(event) {
@@ -561,6 +687,12 @@ function fechaPosteriorAHoy(value) {
 .modal-panel-dark .field-input:focus { background:#111827; }
 .modal-panel-dark .field-input.error { border-color:#f87171; background:#450a0a; }
 .field-input[type="date"] { padding-left:1rem; }
+
+.doc-tipo-btn { display:flex; align-items:center; justify-content:center; gap:0.4rem; padding:0.6rem 0.75rem; border-radius:0.75rem; font-size:0.8rem; font-weight:700; border:1px solid; transition:all 0.15s; }
+.doc-tipo-btn.light { border-color:#d1d5db; background:#f9fafb; color:#4b5563; }
+.doc-tipo-btn.light.activo { border-color:#c0392b; background:#fef2f2; color:#c0392b; }
+.doc-tipo-btn.dark { border-color:#4b5563; background:#1f2937; color:#9ca3af; }
+.doc-tipo-btn.dark.activo { border-color:#f0a500; background:rgba(240,165,0,0.1); color:#f0a500; }
 </style>
 
 

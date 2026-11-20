@@ -15,6 +15,8 @@ function normalizeCliente(cliente) {
     departamento_id: cliente.departamento_id ?? municipio?.departamento_id ?? departamento?.id ?? '',
     municipio_nombre: typeof municipio === 'object' ? municipio?.nombre : municipio,
     departamento_nombre: typeof departamento === 'object' ? departamento?.nombre : cliente.departamento,
+    pais_id: cliente.pais_id ?? cliente.pais?.id ?? '',
+    pais_nombre: typeof cliente.pais === 'object' ? cliente.pais?.nombre : cliente.pais,
   }
 }
 
@@ -22,6 +24,7 @@ export const useClientesStore = defineStore('clientes', () => {
 
   const clientes = ref([])
   const departamentos = ref([])
+  const paises = ref([])
   const loading  = ref(false)
   const error    = ref(null)
   const pagination = ref({
@@ -123,6 +126,15 @@ export const useClientesStore = defineStore('clientes', () => {
     const res = await api.get('/admin/departamentos')
     departamentos.value = Array.isArray(res.data?.data) ? res.data.data : []
     return departamentos.value
+  }
+
+  // paises para clientes con pasaporte
+  async function fetchPaises() {
+    if (paises.value.length) return paises.value
+
+    const res = await api.get('/admin/paises')
+    paises.value = Array.isArray(res.data?.data) ? res.data.data : []
+    return paises.value
   }
 
   async function fetchMunicipios(departamentoId) {
@@ -233,6 +245,7 @@ export const useClientesStore = defineStore('clientes', () => {
     fetchClientes,
     fetchClientesFiltrados,
     fetchDepartamentos,
+    fetchPaises,
     completarDocumentos,
     fetchMunicipios,
     buscarClientes,

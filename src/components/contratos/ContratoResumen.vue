@@ -22,7 +22,7 @@
       </div>
       <div v-if="cliente" class="ticket-row ticket-row--sub">
         <span class="ticket-key">DUI</span>
-        <span class="ticket-val">{{ cliente.dui }}</span>
+        <span class="ticket-val">{{ documentoCliente(cliente) }}</span>
       </div>
 
       <div class="ticket-row" :class="{ 'ticket-row--empty': !fechaEntrega }">
@@ -79,6 +79,7 @@
 <script setup>
 import { nombreVehiculo, formatPrecio, formatHora12 } from '@/utils/contratoFormatters'
 import { formatFecha } from '@/utils/reservaFormatters'
+import { documentoCliente } from '@/utils/clienteDocumento'
 
 defineProps({
   cliente:           { type: Object, default: null },

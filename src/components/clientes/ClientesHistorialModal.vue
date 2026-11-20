@@ -19,11 +19,11 @@
               <div class="min-w-0">
                 <p class="text-[10px] font-bold uppercase tracking-widest text-[#f0a500]/90">Historial del cliente</p>
                 <h2 class="text-lg font-extrabold text-white truncate">{{ clienteInfo?.nombre || '—' }}</h2>
-                <div v-if="clienteInfo?.dui || clienteInfo?.telefono" class="flex flex-wrap items-center gap-2 mt-1.5">
-                  <span v-if="clienteInfo?.dui" class="hist-meta-chip">
+                <div v-if="documentoCliente(clienteInfo) || clienteInfo?.telefono" class="flex flex-wrap items-center gap-2 mt-1.5">
+                  <span v-if="documentoCliente(clienteInfo)" class="hist-meta-chip">
                     <i class="pi pi-id-card text-[10px]"></i>
-                    <span class="hist-meta-label">DUI</span>
-                    <span class="hist-meta-value">{{ clienteInfo.dui }}</span>
+                    <span class="hist-meta-label">{{ tipoDocumentoCliente(clienteInfo) }}</span>
+                    <span class="hist-meta-value">{{ documentoCliente(clienteInfo) }}</span>
                   </span>
                   <span v-if="clienteInfo?.telefono" class="hist-meta-chip">
                     <i class="pi pi-phone text-[10px]"></i>
@@ -337,6 +337,7 @@ import {
   formatFechaSoloHistorial,
 } from '@/utils/clienteHistorialFormatters'
 import { diasEntreFechasISO } from '@/utils/reservaFormatters'
+import { documentoCliente, tipoDocumentoCliente } from '@/utils/clienteDocumento'
 
 const props = defineProps({
   visible: Boolean,
