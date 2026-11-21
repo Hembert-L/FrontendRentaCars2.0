@@ -58,7 +58,7 @@
                 <p class="resumen-dato" :class="isDark ? 'text-gray-300' : 'text-gray-600'">
                   <i class="pi pi-id-card text-[10px] opacity-70"></i>
                   <span>DUI</span>
-                  <strong :class="isDark ? 'text-gray-100' : 'text-gray-900'">{{ cliente.dui }}</strong>
+                  <strong :class="isDark ? 'text-gray-100' : 'text-gray-900'">{{ documentoCliente(cliente) }}</strong>
                 </p>
                 <p v-if="cliente.telefono" class="resumen-dato" :class="isDark ? 'text-gray-300' : 'text-gray-600'">
                   <i class="pi pi-phone text-[10px] opacity-70"></i>
@@ -192,6 +192,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useAppTheme } from '@/composables/useAppTheme'
+import { documentoCliente } from '@/utils/clienteDocumento'
 import { formatFecha, nombreVehiculo, formatPrecio, initials } from '@/utils/reservaFormatters'
 
 const props = defineProps({

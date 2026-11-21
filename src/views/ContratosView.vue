@@ -133,7 +133,7 @@
               </td>
               <td class="px-5 py-4">
                 <p class="font-semibold" :class="isDark ? 'text-gray-200' : 'text-gray-800'">{{ clienteContrato(c)?.nombre || '-' }}</p>
-                <p class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">{{ clienteContrato(c)?.dui || '' }}</p>
+                <p class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">{{ documentoCliente(clienteContrato(c)) }}</p>
               </td>
               <td class="px-5 py-4">
                 <p class="font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">{{ nombreVehiculo(vehiculoContrato(c)) }}</p>
@@ -295,6 +295,7 @@ import Swal from 'sweetalert2'
 import ContratoPdfPreview from '@/components/contratos/ContratoPdfPreview.vue'
 import ContratoCambiarVehiculoModal from '@/components/contratos/ContratoCambiarVehiculoModal.vue'
 import { useContratosStore } from '@/stores/contratos'
+import { documentoCliente } from '@/utils/clienteDocumento'
 import { useAuthStore } from '@/stores/auth'
 import { puedeHacer } from '@/utils/permisos'
 import { useAppTheme } from '@/composables/useAppTheme'
@@ -362,6 +363,7 @@ const contratosFiltrados = computed(() => {
       return c.numero_contrato?.toLowerCase().includes(q) ||
         cliente?.nombre?.toLowerCase().includes(q) ||
         cliente?.dui?.includes(q) ||
+        cliente?.pasaporte?.toLowerCase().includes(q) ||
         nombreVehiculo(vehiculo).toLowerCase().includes(q) ||
         vehiculo?.placa?.toLowerCase().includes(q)
     })
@@ -444,7 +446,7 @@ function clienteContrato(contrato) {
   const embebido = contrato?.cliente || contrato?.reserva?.cliente || null
   if (embebido) return embebido
   const snap = contrato?.info_registro?.cliente
-  return snap ? { nombre: snap.nombre, dui: snap.dui } : null
+  return snap ? { nombre: snap.nombre, dui: snap.dui, pasaporte: snap.pasaporte, tipo_documento: snap.tipo_documento } : null
 }
 
 function vehiculoContrato(contrato) {

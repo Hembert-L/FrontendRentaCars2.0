@@ -23,7 +23,7 @@
       <div class="flex items-start justify-between gap-3">
         <div>
           <p class="font-bold" :class="isDark ? 'text-gray-100' : 'text-gray-900'">{{ cliente.nombre }}</p>
-          <p class="text-xs mt-1" :class="isDark ? 'text-gray-400' : 'text-gray-600'">DUI: {{ cliente.dui }} - Tel: {{ cliente.telefono }}</p>
+          <p class="text-xs mt-1" :class="isDark ? 'text-gray-400' : 'text-gray-600'">{{ documentoClienteTexto(cliente) }} - Tel: {{ cliente.telefono }}</p>
           <p class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-600'">Licencia vence: {{ formatFecha(cliente.vencimiento_licencia) }}</p>
         </div>
         <button type="button" class="text-xs font-bold underline" style="color:#c0392b;" @click="limpiar">Cambiar</button>
@@ -49,7 +49,7 @@
         >
           <div class="flex-1 min-w-0">
             <p class="font-semibold text-sm truncate" :class="isDark ? 'text-gray-100' : 'text-gray-900'">{{ c.nombre }}</p>
-            <p class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-600'">{{ c.dui }} - {{ c.telefono }}</p>
+            <p class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-600'">{{ documentoCliente(c) }} - {{ c.telefono }}</p>
           </div>
           <i class="pi pi-chevron-right text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'"></i>
         </button>
@@ -168,6 +168,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { useClientesStore } from '@/stores/clientes'
 import { documentosVigentes } from '@/utils/contratoFormatters'
+import { documentoCliente, documentoClienteTexto } from '@/utils/clienteDocumento'
 import { formatFecha, nombreVehiculo } from '@/utils/reservaFormatters'
 
 const props = defineProps({

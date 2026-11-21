@@ -28,7 +28,7 @@
         <input
           v-model="search"
           type="text"
-          placeholder="Buscar por nombre, DUI o teléfono..."
+          placeholder="Buscar por nombre, DUI, pasaporte o teléfono..."
           class="w-full pl-9 pr-4 py-2.5 rounded-xl border text-sm focus:outline-none transition focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
           :class="isDark
             ? 'border-gray-700 bg-gray-800 text-gray-100 placeholder:text-gray-500'
@@ -61,7 +61,7 @@
           <thead>
             <tr :style="isDark ? 'background:#111827; border-bottom:1px solid #1f2937;' : 'background:#f3f6fa; border-bottom:1px solid #dbe3ed;'">
               <th class="text-left px-5 py-3.5 text-xs font-bold uppercase tracking-widest" :class="isDark ? 'text-gray-500' : 'text-gray-400'">Cliente</th>
-              <th class="text-left px-5 py-3.5 text-xs font-bold uppercase tracking-widest" :class="isDark ? 'text-gray-500' : 'text-gray-400'">DUI</th>
+              <th class="text-left px-5 py-3.5 text-xs font-bold uppercase tracking-widest" :class="isDark ? 'text-gray-500' : 'text-gray-400'">Documento</th>
               <th class="text-left px-5 py-3.5 text-xs font-bold uppercase tracking-widest" :class="isDark ? 'text-gray-500' : 'text-gray-400'">Licencia</th>
               <th class="text-left px-5 py-3.5 text-xs font-bold uppercase tracking-widest" :class="isDark ? 'text-gray-500' : 'text-gray-400'">Ubicación</th>
               <th class="text-left px-5 py-3.5 text-xs font-bold uppercase tracking-widest" :class="isDark ? 'text-gray-500' : 'text-gray-400'">Licencia vigente</th>
@@ -88,7 +88,10 @@
                 </div>
               </td>
 
-              <td class="px-5 py-4" :class="isDark ? 'text-gray-400' : 'text-gray-600'">{{ cliente.dui }}</td>
+              <td class="px-5 py-4" :class="isDark ? 'text-gray-400' : 'text-gray-600'">
+                <p>{{ documentoCliente(cliente) }}</p>
+                <p v-if="tipoDocumentoCliente(cliente) === 'Pasaporte'" class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">Pasaporte{{ cliente.pais_nombre ? ' · ' + cliente.pais_nombre : '' }}</p>
+              </td>
 
               <td class="px-5 py-4">
                 <p class="font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">{{ cliente.numero_licencia }}</p>
@@ -209,6 +212,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { formatFecha, fechaSoloISO, fechaHoyLocal, sumarDiasISO } from '@/utils/reservaFormatters'
 import ClientesModal from '@/components/clientes/ClientesModal.vue'
+import { documentoCliente, tipoDocumentoCliente } from '@/utils/clienteDocumento'
 import ClientesHistorialModal from '@/components/clientes/ClientesHistorialModal.vue'
 import { useClientesStore } from '@/stores/clientes'
 import { useAppTheme } from '@/composables/useAppTheme'

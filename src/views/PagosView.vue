@@ -357,7 +357,7 @@ const pagosFiltrados = computed(() => {
     if (filtros.hasta && fecha > filtros.hasta) return false
     if (!termino) return true
     const contrato = contratoPago(p)
-    return [contrato?.numero_contrato, nombreCliente(contrato), contrato?.info_registro?.cliente?.dui]
+    return [contrato?.numero_contrato, nombreCliente(contrato), contrato?.info_registro?.cliente?.dui, contrato?.info_registro?.cliente?.pasaporte]
       .some((valor) => normalizarTexto(valor).includes(termino))
   })
 })

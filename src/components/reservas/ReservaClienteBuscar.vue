@@ -47,7 +47,7 @@
           <span class="client-main">
             <strong class="card-title">{{ cliente.nombre }}</strong>
             <span class="client-contact card-sub">
-              <span><i class="pi pi-id-card"></i>{{ cliente.dui || 'Sin DUI' }}</span>
+              <span><i class="pi pi-id-card"></i>{{ documentoCliente(cliente) || 'Sin documento' }}</span>
               <span><i class="pi pi-phone"></i>{{ cliente.telefono || 'Sin teléfono' }}</span>
             </span>
           </span>
@@ -110,6 +110,7 @@
 
 <script setup>
 import { useAppTheme } from '@/composables/useAppTheme'
+import { documentoCliente } from '@/utils/clienteDocumento'
 import { initials, formatFecha } from '@/utils/reservaFormatters'
 import { documentosVigentes } from '@/utils/contratoFormatters'
 

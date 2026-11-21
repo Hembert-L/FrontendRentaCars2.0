@@ -147,7 +147,7 @@
 
               <td class="px-5 py-4">
                 <p class="font-semibold" :class="isDark ? 'text-gray-200' : 'text-gray-800'">{{ r.cliente?.nombre || '—' }}</p>
-                <p class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">{{ r.cliente?.dui }}</p>
+                <p class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-400'">{{ documentoCliente(r.cliente) }}</p>
               </td>
 
               <td class="px-5 py-4">
@@ -326,6 +326,7 @@ import ReservasCanceladasModal from '@/components/reservas/ReservasCanceladasMod
 import { useClientesStore } from '@/stores/clientes'
 import { documentosVigentes } from '@/utils/contratoFormatters'
 import { useReservasStore } from '@/stores/reservas'
+import { documentoCliente } from '@/utils/clienteDocumento'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { formatFecha, fechaHoyLocal, fechaSoloISO, sumarDiasISO } from '@/utils/reservaFormatters'
 import { toastSuccess } from '@/utils/toast'

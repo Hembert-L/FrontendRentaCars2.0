@@ -174,7 +174,8 @@ export function documentosVigentes(cliente, fechaEvaluacion = fechaHoyLocal()) {
     const fecha = new Date(y, m - 1, d)
     return !iso || fecha.getFullYear() !== y || fecha.getMonth() !== m - 1 || fecha.getDate() !== d || iso <= limite
   }
-  const duiVencido = noVigente(cliente?.vencimiento_dui)
+  // extranjeros (pasaporte) no tienen vencimiento de dui, el back lo deja pasar
+  const duiVencido = cliente?.vencimiento_dui === null ? false : noVigente(cliente?.vencimiento_dui)
   const licenciaVencida = noVigente(cliente?.vencimiento_licencia)
   const documentos = [duiVencido ? 'DUI' : '', licenciaVencida ? 'licencia' : ''].filter(Boolean).join(' y ')
   const mensaje = documentos

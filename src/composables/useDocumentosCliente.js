@@ -30,7 +30,7 @@ export function useDocumentosCliente(obtenerCliente, obtenerFecha) {
   const estado = computed(() => documentosVigentes(completo.value || obtenerCliente(), obtenerFecha()))
   const ok = computed(() => !!obtenerCliente() && !cargando.value && !error.value && estado.value.ok)
   const mensaje = computed(() => !obtenerCliente() ? '' : cargando.value
-    ? 'Consultando vencimientos del DUI y la licencia…'
+    ? 'Consultando vencimientos de los documentos del cliente…'
     : error.value ? `No se pudo comprobar la documentación: ${error.value}` : estado.value.mensaje)
   return { estado, ok, mensaje, cargando, error, reintentar }
 }

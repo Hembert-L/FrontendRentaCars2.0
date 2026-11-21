@@ -112,7 +112,7 @@
                   <div class="cancel-field">
                     <span class="cancel-label"><i class="pi pi-user"></i> Cliente</span>
                     <p class="cancel-value">{{ item.reserva?.cliente?.nombre || '—' }}</p>
-                    <p class="cancel-sub">DUI: {{ item.reserva?.cliente?.dui || '—' }}</p>
+                    <p class="cancel-sub">{{ documentoClienteTexto(item.reserva?.cliente, 'Documento: —') }}</p>
                   </div>
                   <div class="cancel-field">
                     <span class="cancel-label"><i class="pi pi-car"></i> Vehículo</span>
@@ -184,6 +184,7 @@
 import { computed, ref, watch } from 'vue'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { useReservasStore } from '@/stores/reservas'
+import { documentoClienteTexto } from '@/utils/clienteDocumento'
 import { formatFecha, nombreVehiculo } from '@/utils/reservaFormatters'
 import { fechaLocalISO } from '@/utils/contratoFormatters'
 
