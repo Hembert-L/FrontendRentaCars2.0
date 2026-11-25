@@ -37,7 +37,7 @@
           <div v-if="reporteAbierto === reporte.id" class="reporte-panel">
             <p class="reporte-panel__description">{{ reporte.descripcion }}</p>
 
-            <div v-if="reporte.needsPeriod || reporte.needsDias || reporte.needsPropietario || reporte.needsPorcentaje" class="reporte-filters">
+            <div v-if="reporte.needsPeriod || reporte.needsDias || reporte.needsPropietario || reporte.needsPorcentaje || reporte.needsVehiculos || reporte.needsLimite" class="reporte-filters">
               <div v-if="reporte.needsPeriod" class="filter-group filter-group--wide">
                 <label>Periodo rápido</label>
                 <div class="period-options">
@@ -115,6 +115,86 @@
                   {{ errorPropietarios }}
                   <button type="button" class="filter-retry" @click="cargarPropietarios">Reintentar</button>
                 </small>
+              </div>
+
+              <div v-if="reporte.needsVehiculos && !errorVehiculos" class="filter-group filter-group--wide">
+                <label>Vehículos a mostrar</label>
+                <div class="period-options">
+                  <button
+                    type="button"
+                    class="period-btn"
+                    :class="{ 'period-btn--active': !filtros.elegirVehiculos }"
+                    @click="filtros.elegirVehiculos = false"
+                  >
+                    Todos los vehículos
+                  </button>
+                  <button
+                    type="button"
+                    class="period-btn"
+                    :class="{ 'period-btn--active': filtros.elegirVehiculos }"
+                    @click="filtros.elegirVehiculos = true"
+                  >
+                    Elegir vehículos
+                  </button>
+                </div>
+
+                <div v-if="filtros.elegirVehiculos" class="veh-picker">
+                  <div class="veh-picker__top">
+                    <input
+                      v-model="busquedaVehiculo"
+                      type="text"
+                      class="filter-control"
+                      placeholder="Buscar por placa, marca o modelo..."
+                    />
+                    <div class="veh-picker__acciones">
+                      <button type="button" class="filter-retry" @click="marcarVisibles(true)">Marcar visibles</button>
+                      <button type="button" class="filter-retry" @click="marcarVisibles(false)">Quitar todos</button>
+                    </div>
+                  </div>
+                  <p v-if="cargandoVehiculos" class="filter-hint">Cargando vehículos...</p>
+                  <p v-else-if="!vehiculosVisibles.length" class="filter-hint">
+                    {{ busquedaVehiculo.trim() ? 'Ningún vehículo coincide con la búsqueda.' : 'No hay vehículos para este propietario.' }}
+                  </p>
+                  <div v-else class="veh-picker__lista">
+                    <label
+                      v-for="v in vehiculosVisibles"
+                      :key="v.id"
+                      class="veh-picker__item"
+                      :class="{ 'veh-picker__item--on': filtros.vehiculoIds.includes(String(v.id)) }"
+                    >
+                      <input v-model="filtros.vehiculoIds" type="checkbox" :value="String(v.id)" />
+                      <span class="veh-picker__placa">{{ v.placa }}</span>
+                      <span class="veh-picker__nombre">{{ nombreVehiculoReporte(v) }}</span>
+                    </label>
+                  </div>
+                  <small class="filter-hint">
+                    {{ filtros.vehiculoIds.length }} de {{ vehiculosDelPropietario.length }} vehículos seleccionados
+                  </small>
+                </div>
+              </div>
+
+              <div v-if="reporte.needsLimite" class="filter-group">
+                <label :for="`limite-${reporte.id}`">Cantidad de vehículos</label>
+                <select
+                  :id="`limite-${reporte.id}`"
+                  v-model="filtros.limite"
+                  class="filter-control"
+                  :class="{ 'filter-control--cambiado': filtros.limite }"
+                >
+                  <option value="">Todos</option>
+                  <option v-for="n in opcionesLimite" :key="n" :value="String(n)">{{ n }} vehículos</option>
+                  <option value="otro">Otra cantidad...</option>
+                </select>
+                <input
+                  v-if="filtros.limite === 'otro'"
+                  v-model.number="filtros.limiteOtro"
+                  type="number"
+                  min="1"
+                  max="500"
+                  class="filter-control"
+                  placeholder="Escribe cuántos (1 a 500)"
+                />
+                <small class="filter-hint">Se toman en orden por estado del vehículo.</small>
               </div>
 
               <div v-if="reporte.needsPorcentaje" class="filter-group">
@@ -204,6 +284,68 @@ const filtros = reactive({
   dias: 30,
   propietarioId: '',
   porcentajeAdmin: 0,
+  elegirVehiculos: false,
+  vehiculoIds: [],
+  limite: '',
+  limiteOtro: null,
+})
+
+// el back acepta limite de 1 a 500
+const opcionesLimite = [5, 10, 20, 50, 100]
+
+function limiteElegido() {
+  if (!filtros.limite) return null
+  return filtros.limite === 'otro' ? Number(filtros.limiteOtro) : Number(filtros.limite)
+}
+
+const vehiculos = ref([])
+const cargandoVehiculos = ref(false)
+const errorVehiculos = ref(false)
+const busquedaVehiculo = ref('')
+
+// el contador no puede listar vehiculos, en ese caso no sale el selector
+async function cargarVehiculos() {
+  cargandoVehiculos.value = true
+  errorVehiculos.value = false
+  try {
+    const { items } = await fetchAllPaginated((params) => api.get('/admin/vehiculos', { params }))
+    vehiculos.value = [...items].sort((a, b) => String(a.placa).localeCompare(String(b.placa), 'es'))
+  } catch {
+    vehiculos.value = []
+    errorVehiculos.value = true
+  } finally {
+    cargandoVehiculos.value = false
+  }
+}
+
+function nombreVehiculoReporte(v) {
+  return [v.modelo?.marca?.nombre, v.modelo?.nombre, v.anio].filter(Boolean).join(' ')
+}
+
+// si hay propietario elegido solo se ofrecen sus carros
+const vehiculosDelPropietario = computed(() => {
+  if (!filtros.propietarioId) return vehiculos.value
+  return vehiculos.value.filter((v) => String(v.propietario_id ?? v.propietario?.id ?? '') === filtros.propietarioId)
+})
+
+const vehiculosVisibles = computed(() => {
+  const q = busquedaVehiculo.value.trim().toLowerCase()
+  if (!q) return vehiculosDelPropietario.value
+  return vehiculosDelPropietario.value.filter((v) =>
+    [v.placa, nombreVehiculoReporte(v)].some((t) => String(t || '').toLowerCase().includes(q)))
+})
+
+function marcarVisibles(marcar) {
+  if (!marcar) { filtros.vehiculoIds = []; return }
+  const ids = new Set(filtros.vehiculoIds)
+  vehiculosVisibles.value.forEach((v) => ids.add(String(v.id)))
+  filtros.vehiculoIds = [...ids]
+}
+
+// al cambiar de propietario se sueltan los carros que ya no son suyos
+watch(() => filtros.propietarioId, () => {
+  const validos = new Set(vehiculosDelPropietario.value.map((v) => String(v.id)))
+  filtros.vehiculoIds = filtros.vehiculoIds.filter((id) => validos.has(id))
 })
 
 const propietarios = ref([])
@@ -249,10 +391,12 @@ const catalogoReportes = [
   {
     id: 'estado-flota',
     titulo: 'Estado de flota',
-    descripcion: 'Distribución de vehículos por estado y listado de la flota, con filtro opcional por propietario.',
+    descripcion: 'Distribución de vehículos por estado y listado de la flota, con filtro por propietario, por vehículos y cantidad a mostrar.',
     icono: 'pi-car',
     endpoint: '/admin/reportes/estado-flota',
     needsPropietario: true,
+    needsVehiculos: true,
+    needsLimite: true,
   },
   {
     id: 'licencias-por-vencer',
@@ -384,6 +528,14 @@ function resumenFiltros(reporte) {
     const prop = propietarios.value.find((p) => String(p.id) === filtros.propietarioId)
     partes.push({ etiqueta: 'Propietario:', valor: prop ? prop.nombre : 'Todos' })
   }
+  if (reporte.needsVehiculos && !errorVehiculos.value) {
+    const n = filtros.vehiculoIds.length
+    partes.push({ etiqueta: 'Vehículos:', valor: filtros.elegirVehiculos && n ? n + (n === 1 ? ' seleccionado' : ' seleccionados') : 'Todos' })
+  }
+  if (reporte.needsLimite) {
+    const lim = limiteElegido()
+    partes.push({ etiqueta: 'Cantidad:', valor: lim ? `máximo ${lim}` : 'Todos' })
+  }
   if (reporte.needsPorcentaje) partes.push({ etiqueta: 'Administración:', valor: `${Number(filtros.porcentajeAdmin) || 0}%` })
   return partes
 }
@@ -392,6 +544,11 @@ function limpiarFiltros(reporte) {
   filtros.dias = 30
   filtros.propietarioId = ''
   filtros.porcentajeAdmin = 0
+  filtros.elegirVehiculos = false
+  filtros.vehiculoIds = []
+  filtros.limite = ''
+  filtros.limiteOtro = null
+  busquedaVehiculo.value = ''
   if (reporte.needsPeriod) seleccionarPeriodo('mes')
 }
 
@@ -441,6 +598,15 @@ function validarReporte(reporte) {
     return 'Los días por vencer deben estar entre 1 y 365.'
   }
 
+  if (reporte.needsVehiculos && filtros.elegirVehiculos && !filtros.vehiculoIds.length) {
+    return 'Marca al menos un vehículo o elige "Todos los vehículos".'
+  }
+
+  if (reporte.needsLimite && filtros.limite) {
+    const lim = limiteElegido()
+    if (!Number.isInteger(lim) || lim < 1 || lim > 500) return 'La cantidad de vehículos debe ser un número entero entre 1 y 500.'
+  }
+
   const porcentaje = Number(filtros.porcentajeAdmin || 0)
   if (reporte.needsPorcentaje && (!Number.isFinite(porcentaje) || porcentaje < 0 || porcentaje > 100)) {
     return 'El porcentaje de administración debe estar entre 0 y 100.'
@@ -459,6 +625,11 @@ function paramsReporte(reporte) {
 
   if (reporte.needsDias) params.dias = filtros.dias
   if (reporte.needsPropietario && filtros.propietarioId) params.propietario_id = filtros.propietarioId
+  // el back lo recibe como vehiculo_ids[]
+  if (reporte.needsVehiculos && filtros.elegirVehiculos && filtros.vehiculoIds.length) {
+    params.vehiculo_ids = filtros.vehiculoIds.map(Number)
+  }
+  if (reporte.needsLimite && limiteElegido()) params.limite = limiteElegido()
   if (reporte.needsPorcentaje && Number(filtros.porcentajeAdmin) > 0) {
     params.porcentaje_administracion = Number(filtros.porcentajeAdmin)
   }
@@ -487,6 +658,7 @@ function fechaISO(fecha) {
 onMounted(() => {
   seleccionarPeriodo('mes')
   cargarPropietarios()
+  cargarVehiculos()
   const reporteGuardado = localStorage.getItem(STORAGE_KEY_REPORTE_ABIERTO)
   if (reportes.value.some((reporte) => reporte.id === reporteGuardado)) {
     reporteAbierto.value = reporteGuardado
@@ -752,6 +924,84 @@ onMounted(() => {
   font-weight: 800;
   text-decoration: underline;
   color: inherit;
+}
+
+.veh-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.veh-picker__top {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.veh-picker__acciones {
+  display: flex;
+  gap: 0.6rem;
+  white-space: nowrap;
+  font-size: 0.75rem;
+}
+
+.veh-picker__lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 0.4rem;
+  max-height: 14rem;
+  overflow-y: auto;
+  padding: 0.15rem;
+}
+
+.veh-picker__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.4rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 500 !important;
+  color: #334155;
+  background: #fff;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.reporte-item--dark .veh-picker__item {
+  color: #e2e8f0;
+  background: #0f172a;
+  border-color: #334155;
+}
+
+.veh-picker__item--on {
+  border-color: #c0392b;
+  background: #fdf3f2;
+}
+
+.reporte-item--dark .veh-picker__item--on {
+  border-color: #f0a500;
+  background: rgba(240, 165, 0, 0.08);
+}
+
+.veh-picker__item input { accent-color: #c0392b; }
+
+.veh-picker__placa {
+  font-family: ui-monospace, monospace;
+  font-weight: 800;
+}
+
+.veh-picker__nombre {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.75;
+}
+
+@media (max-width: 640px) {
+  .veh-picker__top { flex-direction: column; align-items: stretch; }
 }
 
 .period-options {
