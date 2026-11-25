@@ -234,27 +234,71 @@
                         Tercero
                       </button>
                     </div>
-                    <input
-                      v-if="tipoPropietario === 'TERCERO'"
-                      v-model="busquedaPropietario"
-                      type="text"
-                      class="veh-input mb-2"
-                      placeholder="Buscar propietario..."
-                    />
-                    <select
-                      v-model="form.propietario_id"
-                      class="veh-input veh-input--select"
-                      :class="{ 'veh-input--error': errors.propietario_id }"
-                    >
-                      <option value="">Seleccionar propietario</option>
-                      <option v-for="p in propietariosDisponibles" :key="p.id" :value="p.id">{{ p.nombre }}</option>
-                    </select>
-                    <p v-if="tipoPropietario === 'PROPIO' && !propietarioPropio" class="veh-help">
-                      No hay propietario propio registrado. Agrégalo desde la pestaña Propietarios.
-                    </p>
-                    <p v-if="tipoPropietario === 'TERCERO' && !propietariosDisponibles.length" class="veh-help">
-                      No hay propietarios de tercero disponibles con ese filtro.
-                    </p>
+                    <!-- propio: solo hay uno, se muestra ya elegido -->
+                    <template v-if="tipoPropietario === 'PROPIO'">
+                      <div v-if="propietarioPropio" class="veh-owner-card veh-owner-card--selected">
+                        <span class="veh-owner-avatar"><i class="pi pi-home"></i></span>
+                        <span class="veh-owner-info">
+                          <strong>{{ propietarioPropio.nombre }}</strong>
+                          <small>Vehículo de la empresa</small>
+                        </span>
+                        <i class="pi pi-check-circle veh-owner-check"></i>
+                      </div>
+                      <p v-else class="veh-help">
+                        No hay propietario propio registrado. Agrégalo desde la pestaña Propietarios.
+                      </p>
+                    </template>
+
+                    <!-- tercero: buscar y tocar uno de la lista -->
+                    <template v-else>
+                      <div v-if="propietarioSeleccionado" class="veh-owner-card veh-owner-card--selected">
+                        <span class="veh-owner-avatar">{{ inicialesPropietario(propietarioSeleccionado.nombre) }}</span>
+                        <span class="veh-owner-info">
+                          <strong>{{ propietarioSeleccionado.nombre }}</strong>
+                          <small>{{ propietarioSeleccionado.telefono || 'Sin teléfono' }}</small>
+                        </span>
+                        <button type="button" class="veh-owner-change" @click="cambiarPropietario">
+                          Cambiar
+                        </button>
+                      </div>
+
+                      <template v-else>
+                        <div class="veh-owner-search">
+                          <i class="pi pi-search"></i>
+                          <input
+                            ref="busquedaPropietarioInput"
+                            v-model="busquedaPropietario"
+                            type="text"
+                            class="veh-input"
+                            :class="{ 'veh-input--error': errors.propietario_id }"
+                            placeholder="Escribe nombre o teléfono para filtrar..."
+                          />
+                        </div>
+                        <div v-if="propietariosDisponibles.length" class="veh-owner-list">
+                          <button
+                            v-for="p in propietariosDisponibles"
+                            :key="p.id"
+                            type="button"
+                            class="veh-owner-card"
+                            @click="elegirPropietario(p)"
+                          >
+                            <span class="veh-owner-avatar">{{ inicialesPropietario(p.nombre) }}</span>
+                            <span class="veh-owner-info">
+                              <strong>{{ p.nombre }}</strong>
+                              <small>{{ p.telefono || 'Sin teléfono' }}</small>
+                            </span>
+                          </button>
+                        </div>
+                        <p v-else class="veh-help">
+                          {{ busquedaPropietario.trim()
+                            ? `Ningún propietario coincide con "${busquedaPropietario.trim()}".`
+                            : 'No hay propietarios terceros registrados. Agrégalos desde la pestaña Propietarios.' }}
+                        </p>
+                        <p v-if="propietariosDisponibles.length" class="veh-hint">
+                          {{ propietariosDisponibles.length }} {{ propietariosDisponibles.length === 1 ? 'propietario' : 'propietarios' }} · toca uno para elegirlo
+                        </p>
+                      </template>
+                    </template>
                     <p v-if="errors.propietario_id" class="veh-error">{{ errors.propietario_id }}</p>
                   </div>
 
@@ -319,7 +363,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, computed } from 'vue'
+import { ref, reactive, watch, computed, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useVehiculosStore } from '@/stores/vehiculos'
 import { useAppTheme } from '@/composables/useAppTheme'
@@ -478,6 +522,27 @@ watch(() => form.capacidad_pasajeros, () => {
   const actual = categorias.value.find((c) => c.id == form.categoria_id)
   if (actual && !categoriaAceptaPasajeros(actual)) form.categoria_id = ''
 })
+
+const busquedaPropietarioInput = ref(null)
+
+const propietarioSeleccionado = computed(() =>
+  propietarios.value.find((p) => p.id == form.propietario_id) || null,
+)
+
+function elegirPropietario(p) {
+  form.propietario_id = p.id
+  errors.propietario_id = ''
+}
+
+function cambiarPropietario() {
+  form.propietario_id = ''
+  busquedaPropietario.value = ''
+  nextTick(() => busquedaPropietarioInput.value?.focus())
+}
+
+function inicialesPropietario(nombre) {
+  return String(nombre || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
+}
 
 function seleccionarTipoPropietario(tipo) {
   tipoPropietario.value = tipo
@@ -961,6 +1026,76 @@ defineExpose({ aplicarErroresBackend })
   color: #6b7280;
 }
 .veh-form-area--dark .veh-help { color: #9ca3af; }
+
+.veh-owner-search { position: relative; }
+.veh-owner-search > i {
+  position: absolute;
+  left: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.8rem;
+  color: #9ca3af;
+  pointer-events: none;
+}
+.veh-owner-search .veh-input { padding-left: 2.25rem; }
+.veh-owner-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-top: 0.5rem;
+  max-height: 11rem;
+  overflow-y: auto;
+  padding-right: 0.15rem;
+}
+.veh-owner-card {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.75rem;
+  border: 1.5px solid #e5e7eb;
+  background: #fff;
+  color: #374151;
+  text-align: left;
+  transition: all 0.15s;
+}
+button.veh-owner-card:hover { border-color: #922b21; background: #fef2f2; }
+.veh-form-area--dark .veh-owner-card { background: #1f2937; border-color: #374151; color: #e5e7eb; }
+.veh-form-area--dark button.veh-owner-card:hover { background: rgba(146, 43, 33, 0.25); border-color: #922b21; }
+.veh-owner-card--selected { border-color: #922b21; background: #fef2f2; }
+.veh-form-area--dark .veh-owner-card--selected { background: rgba(146, 43, 33, 0.25); border-color: #922b21; }
+.veh-owner-avatar {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 800;
+  background: #922b21;
+  color: #fff;
+}
+.veh-owner-info { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.veh-owner-info strong { font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.veh-owner-info small { font-size: 0.68rem; opacity: 0.7; }
+.veh-owner-check { color: #922b21; font-size: 1rem; }
+.veh-form-area--dark .veh-owner-check { color: #f0a500; }
+.veh-owner-change {
+  flex-shrink: 0;
+  padding: 0.3rem 0.7rem;
+  border-radius: 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border: 1px solid #922b21;
+  color: #922b21;
+  background: transparent;
+}
+.veh-owner-change:hover { background: #922b21; color: #fff; }
+.veh-form-area--dark .veh-owner-change { border-color: #f0a500; color: #f0a500; }
+.veh-form-area--dark .veh-owner-change:hover { background: #f0a500; color: #1f2937; }
 
 .veh-alert {
   display: flex;
