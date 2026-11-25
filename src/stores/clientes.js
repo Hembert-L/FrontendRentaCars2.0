@@ -120,21 +120,26 @@ export const useClientesStore = defineStore('clientes', () => {
     return completo
   }
 
-  async function fetchDepartamentos() {
-    if (departamentos.value.length) return departamentos.value
+  // con search usa el filtro del back y no toca la lista guardada
+  async function fetchDepartamentos(search = '') {
+    const q = String(search || '').trim()
+    if (!q && departamentos.value.length) return departamentos.value
 
-    const res = await api.get('/admin/departamentos')
-    departamentos.value = Array.isArray(res.data?.data) ? res.data.data : []
-    return departamentos.value
+    const res = await api.get('/admin/departamentos', { params: q ? { search: q } : {} })
+    const lista = Array.isArray(res.data?.data) ? res.data.data : []
+    if (!q) departamentos.value = lista
+    return lista
   }
 
   // paises para clientes con pasaporte
-  async function fetchPaises() {
-    if (paises.value.length) return paises.value
+  async function fetchPaises(search = '') {
+    const q = String(search || '').trim()
+    if (!q && paises.value.length) return paises.value
 
-    const res = await api.get('/admin/paises')
-    paises.value = Array.isArray(res.data?.data) ? res.data.data : []
-    return paises.value
+    const res = await api.get('/admin/paises', { params: q ? { search: q } : {} })
+    const lista = Array.isArray(res.data?.data) ? res.data.data : []
+    if (!q) paises.value = lista
+    return lista
   }
 
   async function fetchMunicipios(departamentoId) {
