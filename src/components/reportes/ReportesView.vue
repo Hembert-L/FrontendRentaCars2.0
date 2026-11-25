@@ -249,9 +249,10 @@ const catalogoReportes = [
   {
     id: 'estado-flota',
     titulo: 'Estado de flota',
-    descripcion: 'Distribución de vehículos por estado y listado general de la flota.',
+    descripcion: 'Distribución de vehículos por estado y listado de la flota, con filtro opcional por propietario.',
     icono: 'pi-car',
     endpoint: '/admin/reportes/estado-flota',
+    needsPropietario: true,
   },
   {
     id: 'licencias-por-vencer',

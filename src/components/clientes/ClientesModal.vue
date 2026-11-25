@@ -85,20 +85,16 @@
               </div>
               <div>
                 <label class="field-label">País del pasaporte</label>
-                <div class="relative">
-                  <i class="pi pi-globe input-icon"></i>
-                  <select
-                    v-model="form.pais_id"
-                    class="field-input field-select"
-                    :class="errors.pais_id ? 'error' : ''"
-                    :disabled="cargandoPaises"
-                  >
-                    <option value="">{{ cargandoPaises ? 'Cargando...' : 'Selecciona país' }}</option>
-                    <option v-for="pais in paises" :key="pais.id" :value="String(pais.id)">
-                      {{ pais.nombre }}
-                    </option>
-                  </select>
-                </div>
+                <SelectBuscable
+                  v-model="form.pais_id"
+                  :opciones="paises"
+                  :buscar="store.fetchPaises"
+                  icono="pi-globe"
+                  :placeholder="cargandoPaises ? 'Cargando...' : 'Escribe el país...'"
+                  :disabled="cargandoPaises"
+                  :error="!!errors.pais_id"
+                  @change="errors.pais_id = ''"
+                />
                 <p v-if="errors.pais_id" class="field-error">{{ errors.pais_id }}</p>
               </div>
             </div>
@@ -184,38 +180,30 @@
             <div v-if="form.tipo_documento === 'DUI'" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label class="field-label">Departamento</label>
-                <div class="relative">
-                  <i class="pi pi-map-marker input-icon"></i>
-                  <select
-                    v-model="form.departamento_id"
-                    class="field-input field-select"
-                    :class="errors.departamento_id ? 'error' : ''"
-                    :disabled="cargandoDepartamentos"
-                  >
-                    <option value="">{{ cargandoDepartamentos ? 'Cargando...' : 'Selecciona departamento' }}</option>
-                    <option v-for="departamento in departamentos" :key="departamento.id" :value="String(departamento.id)">
-                      {{ departamento.nombre }}
-                    </option>
-                  </select>
-                </div>
+                <SelectBuscable
+                  v-model="form.departamento_id"
+                  :opciones="departamentos"
+                  :buscar="store.fetchDepartamentos"
+                  icono="pi-map-marker"
+                  :placeholder="cargandoDepartamentos ? 'Cargando...' : 'Escribe el departamento...'"
+                  :disabled="cargandoDepartamentos"
+                  :error="!!errors.departamento_id"
+                  @change="errors.departamento_id = ''"
+                />
                 <p v-if="errors.departamento_id" class="field-error">{{ errors.departamento_id }}</p>
               </div>
               <div>
                 <label class="field-label">Municipio</label>
-                <div class="relative">
-                  <i class="pi pi-map input-icon"></i>
-                  <select
-                    v-model="form.municipio_id"
-                    class="field-input field-select"
-                    :class="errors.municipio_id ? 'error' : ''"
-                    :disabled="!form.departamento_id || cargandoMunicipios"
-                  >
-                    <option value="">{{ municipioPlaceholder }}</option>
-                    <option v-for="municipio in municipios" :key="municipio.id" :value="String(municipio.id)">
-                      {{ municipio.nombre }}
-                    </option>
-                  </select>
-                </div>
+                <!-- municipios no tienen search en el back, se filtran aqui -->
+                <SelectBuscable
+                  v-model="form.municipio_id"
+                  :opciones="municipios"
+                  icono="pi-map"
+                  :placeholder="municipioPlaceholder"
+                  :disabled="!form.departamento_id || cargandoMunicipios"
+                  :error="!!errors.municipio_id"
+                  @change="errors.municipio_id = ''"
+                />
                 <p v-if="errors.municipio_id" class="field-error">{{ errors.municipio_id }}</p>
               </div>
             </div>
@@ -261,6 +249,7 @@
 <script setup>
 import { ref, reactive, watch, computed } from 'vue'
 import TelefonoPaisInput from '@/components/common/TelefonoPaisInput.vue'
+import SelectBuscable from '@/components/common/SelectBuscable.vue'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { useClientesStore } from '@/stores/clientes'
 import { errorNombrePersona } from '@/utils/validacionesTexto'

@@ -344,7 +344,9 @@ function licenciaVigente(vencimiento) {
 function ubicacionCliente(cliente) {
   const municipio = cliente.municipio_nombre || cliente.municipio?.nombre || cliente.municipio
   const departamento = cliente.departamento_nombre || cliente.municipio?.departamento?.nombre || cliente.departamento
-  return [municipio, departamento].filter(Boolean).join(', ') || '—'
+  // extranjero: no tiene municipio, se muestra el pais
+  const pais = !municipio && !departamento ? cliente.pais_nombre : ''
+  return [municipio, departamento, pais].filter(Boolean).join(', ') || '—'
 }
 </script>
 

@@ -446,7 +446,14 @@ function clienteContrato(contrato) {
   const embebido = contrato?.cliente || contrato?.reserva?.cliente || null
   if (embebido) return embebido
   const snap = contrato?.info_registro?.cliente
-  return snap ? { nombre: snap.nombre, dui: snap.dui, pasaporte: snap.pasaporte, tipo_documento: snap.tipo_documento } : null
+  return snap ? {
+    nombre: snap.nombre,
+    dui: snap.dui,
+    pasaporte: snap.pasaporte,
+    documento: snap.documento,
+    tipo_documento: snap.tipo_documento,
+    pais: snap.pais,
+  } : null
 }
 
 function vehiculoContrato(contrato) {
